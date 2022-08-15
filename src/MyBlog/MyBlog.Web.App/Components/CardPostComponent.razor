@@ -1,0 +1,28 @@
+﻿@if(PostItem!=null){
+<div class="post">
+    <div class="post_item">
+        <div class="post_item_left">
+                <img src="@UrlImage" />
+        </div>
+        <div class="post_item_right">
+            <div class="description_post">
+                <h3 class="header_post">
+                    <a href="https://localhost:7273/post/@PostItem.HeaderLink">@PostItem.Header </a>
+                </h3>
+                <h4 class="datetime_create_post">@PostItem.Published</h4>
+                <p class="short_content">
+                   @PostItem.ShortContent
+                </p>
+            </div>
+            <div class="tags">
+                    @foreach (var tag in PostItem.Tags)
+                    {
+                        <a class="tag" href="/posts/tag/@tag.TagLink">@tag.Name</a>
+
+                    }
+               
+            </div>
+        </div>
+    </div>
+</div>
+}

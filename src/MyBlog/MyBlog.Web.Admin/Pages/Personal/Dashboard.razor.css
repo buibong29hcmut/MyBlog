@@ -1,0 +1,9 @@
+﻿.edit {
+    padding: 12px 24px;
+    background-color: #04aa6d;
+}
+
+.delete {
+    padding: 12px 24px;
+    background-color: #f44336;
+}

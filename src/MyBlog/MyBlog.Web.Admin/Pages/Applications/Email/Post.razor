@@ -1,0 +1,98 @@
+﻿@page "/application/Post/{Id?}"
+@namespace MyBlog.Web.Admin.Pages.Applications.Email
+@using MyBlog.Application.Reponses.Tags
+@using MyBlog.Application.Requests.Tags
+@using MyBlog.Web.Admin.Data
+@inject ISnackbar Snackbar
+@inject NavigationManager navigationManager
+
+<MudHidden Breakpoint="Breakpoint.SmAndDown">
+    <MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Create Or Update Application</MudText>
+</MudHidden>
+<MudHidden Breakpoint="Breakpoint.MdAndUp">
+    <MudPaper Elevation="25" Class="d-flex align-center py-1 mb-4">
+        <MudIconButton OnClick="@(() => OpenDrawer())" Icon="@Icons.Material.Outlined.Menu" Color="Color.Inherit" Class="ml-3 mr-2" />
+        <MudText Typo="Typo.h6" Color="Color.Primary">Email Application</MudText>
+    </MudPaper>
+</MudHidden>
+
+@if (PostDetail != null)
+{
+    <MudTextField @bind-Value="@PostDetail.Header" Label="Header" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+<MudTextField @bind-Value="@PostDetail.ShortContent" Label="Short Content" Variant="Variant.Outlined"   Margin="Margin.Dense"/>
+    <MudPaper @ondragenter="@SetDragClass" @ondragleave="@ClearDragClass" @ondragend="@ClearDragClass" Height="300px" Outlined="true" Class="@DragClass">
+        @if (!Clearing)
+        {
+            <InputFile OnChange="OnInputFileChanged" multiple class="absolute mud-width-full mud-height-full overflow-hidden z-2" style="opacity:0;" />
+        }
+        <MudText Typo="Typo.h6">Drag and drop files here or click</MudText>
+        @if(!string.IsNullOrEmpty(PostDetail.ImagePost))
+        {
+           <MudImage Width="500" Height="230" Src="@UrlImagePost"></MudImage>
+
+        }
+        
+    </MudPaper>
+    
+    <MudToolBar DisableGutters="true" Style="margin-top:20px" Class="gap-4">
+        <MudButton OnClick="Clear"  Color="Color.Error" Variant="Variant.Filled">Clear</MudButton>
+    </MudToolBar>
+     <MudItem xs="12" sm="6" md="4" Style="margin-bottom:30px">
+        <MudAutocomplete T="string" Label="US States" @bind-Value="TagItem" SearchFunc="@Search2"
+                         ResetValueOnEmptyText="@resetValueOnEmptyText"
+                         CoerceText="@coerceText" CoerceValue="@coerceValue"
+                         AdornmentIcon="@Icons.Material.Filled.Search" AdornmentColor="Color.Primary" />
+         <MudButton  ButtonType="ButtonType.Button" OnClick="(()=>AddItem())" Variant="Variant.Filled" Color="Color.Primary" 
+             Class="ml-auto mt-3 mb-3" >ADD TAG
+         </MudButton>
+    </MudItem>
+    <MudPaper Height="60px" Style="margin-bottom:20px">
+        @if(Tags.Count()>0){
+            @foreach (var item in Tags)
+            {
+                <MudChip Variant="Variant.Text" Color="Color.Secondary" OnClose="(()=>RemoveTagItem(item))">@item</MudChip>
+            }
+        }
+
+    </MudPaper>
+    <MudTextField @bind-Value="@PostDetail.Created" Format="yyyy/MM/dd" Style="margin=5,5,5,5" Disabled="true" Label="Created" Variant="Variant.Outlined" Margin="Margin.Dense" />
+  <MudTextField @bind-Value="@PostDetail.Published" Format="yyyy/MM/dd"  Style="margin=5,5,5,5" Disabled="true" Label="Published" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+
+<div class="d-flex flex-grow-1 flex-row">
+    <MudPaper Elevation="25" Class="py-4 flex-grow-1">
+        <EditForm Model="@editorOptions">
+            <EditorComponent  EditorWidth="100%" @bind-EditorValue="@PostDetail.Content"></EditorComponent>
+        </EditForm>
+    </MudPaper>
+</div>
+    <MudCheckBox @bind-Checked="@Basic_CheckBox1" Label="Published"></MudCheckBox>
+
+<MudDrawer @bind-Open="@open" Anchor="@Anchor.Left" Elevation="1" Variant="@DrawerVariant.Temporary">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="mx-4 mt-6 mb-4">Compose</MudButton>
+    <EmailNavList folder="@Id" />
+</MudDrawer>
+
+ <MudCardActions Class="pb-4 pl-4">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ml-auto" @onclick="@(() =>CreateOrUpdatePost())">Save Changes</MudButton>
+ </MudCardActions>
+ }
+@code
+{
+    private bool resetValueOnEmptyText;
+    private bool coerceText;
+    private bool coerceValue;
+    private string[] states { get; set; }
+
+
+ 
+
+    private async Task<IEnumerable<string>> Search2(string value)
+    {
+        await Task.Delay(5);
+
+        if (string.IsNullOrEmpty(value))
+            return new string[0];
+        return states.Where(x => x.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+   
+}

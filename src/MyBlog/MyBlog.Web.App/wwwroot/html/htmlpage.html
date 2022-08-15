@@ -1,0 +1,1325 @@
+﻿
+
+            <div itemprop="text" ng-non-bindable="">
+                <p>Tutorial built with <strong>.NET 6.0</strong></p>
+
+                <p style="margin-bottom:0;">Other versions available:</p>
+
+                <ul>
+                    <li><strong>.NET: </strong> <a href="/post/2021/06/15/net-5-api-jwt-authentication-with-refresh-tokens">.NET 5.0</a>, <a href="/post/2020/05/25/aspnet-core-3-api-jwt-authentication-with-refresh-tokens">ASP.NET Core 3.1</a></li>
+                    <li><strong>Node: </strong> <a href="/post/2020/06/17/nodejs-mongodb-api-jwt-authentication-with-refresh-tokens">Node.js + MongoDB</a></li>
+                </ul>
+
+                <p>In this tutorial we'll go through an example of how to implement JWT (JSON Web Token) authentication with refresh tokens in a&nbsp;.NET 6.0 API.</p>
+
+                <p>For an extended example that includes email sign up, verification, forgot password and user management (CRUD) functionality see <a href="/post/2022/02/26/net-6-boilerplate-api-tutorial-with-email-sign-up-verification-authentication-forgot-password">.NET 6.0 - Boilerplate API Tutorial with Email Sign Up, Verification, Authentication &amp; Forgot Password</a>.</p>
+
+                <h4>Authentication implementation overview</h4>
+
+                <p>Authentication is implemented with JWT access tokens and refresh tokens. On successful authentication the API returns a short lived JWT access token that expires after 15 minutes, and a refresh token that expires after 7 days in an HTTP Only cookie. The JWT is used for accessing secure routes on the API and the refresh token is used for generating new JWT access tokens when (or just before) they expire.</p>
+
+                <p>HTTP Only cookies are used for refresh tokens to increase security because they are not accessible to client-side javascript which prevents XSS (cross site scripting) attacks, and refresh tokens only have access to generate new JWT tokens (via the <code>/users/refresh-token</code> route) which prevents them from being used in CSRF (cross site request forgery) attacks.</p>
+
+                <h4>API endpoints</h4>
+
+                <p>The example .NET API has the following endpoints/routes to demonstrate authenticating with JWT, refreshing and revoking tokens, and accessing secure routes:</p>
+
+                <ul>
+                    <li><code>/users/authenticate</code> - public route that accepts POST requests containing a username and password in the body. On success a JWT access token is returned with basic user details, and an HTTP Only cookie containing a refresh token.</li>
+                    <li><code>/users/refresh-token</code> - public route that accepts POST requests containing a cookie with a refresh token. On success a new JWT access token is returned with basic user details, and an HTTP Only cookie containing a new refresh token (see <em>refresh token rotation</em> just below for an explanation).</li>
+                    <li><code>/users/revoke-token</code> - secure route that accepts POST requests containing a refresh token either in the request body or in a cookie, if both are present priority is given to the request body. On success the token is revoked and can no longer be used to generate new JWT access tokens.</li>
+                    <li><code>/users</code> - secure route that accepts GET requests and returns a list of all the users in the application.</li>
+                    <li><code>/users/{id}</code> - secure route that accepts GET requests and returns the details of the user with the specified id.</li>
+                    <li><code>/users/{id}/refresh-tokens</code> - secure route that accepts GET requests and returns a list of all refresh tokens (active and revoked) of the user with the specified id.</li>
+                </ul>
+
+                <h4>Refresh token rotation</h4>
+
+                <p>Each time a refresh token is used to generate a new JWT token (via the <code>/users/refresh-token</code> route), the refresh token is revoked and replaced by a new refresh token. This technique is known as <em>Refresh Token Rotation</em> and increases security by reducing the lifetime of refresh tokens, which makes it less likely that a compromised token will be valid (or valid for long). When a refresh token is rotated the new token is saved in the <code>ReplacedByToken</code> field of the revoked token to create an audit trail in the database.</p>
+
+                <p>Revoked and expired refresh token records are kept in the database for the number of days set in the <code>RefreshTokenTTL</code> property in the <a href="#app-settings-json">appsettings.json</a> file. The default is 2 days, after which old inactive tokens are deleted by the <a href="#user-service-cs">user service</a> in the <code>Authenticate()</code> and <code>RefreshToken()</code> methods.</p>
+
+                <h4>Revoked token reuse detection</h4>
+
+                <p>If an attempt is made to generate a new JWT token using a revoked refresh token, the API treats this as a potentially malicious user with a stolen (revoked) refresh token, or a valid user attempting to access the system after their token has been revoked by a malicious user with a stolen (active) refresh token. In either case the API revokes all descendant tokens because the token and its descendants were likely created on the same device which may have been compromised. The reason revoked is recorded as <code>"Attempted reuse of revoked ancestor token"</code> so the user can see it in the database or via the <code>/users/{id}/refresh-tokens</code> route.</p>
+
+                <h4>EF Core InMemory database for testing</h4>
+
+                <p>To keep the api code as simple as possible, it's configured to use the EF Core InMemory database provider which allows Entity Framework Core to create and connect to an in-memory database rather than you having to install a real db server. A test user is automatically created on startup in the <a href="#program-cs">Program.cs</a> file.</p>
+
+                <p>The db provider can be easily switched out to connect a real database such as SQL Server, Oracle, MySql etc, for an example api that uses SQLite in development and SQL Server in production see <a href="/post/2022/01/07/net-6-user-registration-and-login-tutorial-with-example-api">.NET 6.0 - User Registration and Login Tutorial with Example API</a>.</p>
+
+                <h4>Code on GitHub</h4>
+
+                <p>The tutorial project is available on GitHub at&nbsp;<a href="https://github.com/cornflourblue/dotnet-6-jwt-refresh-tokens-api" rel="nofollow" target="_blank">https://github.com/cornflourblue/dotnet-6-jwt-refresh-tokens-api</a>.</p>
+
+                <h2>
+                    <br>
+                    .NET 6.0 Tutorial Contents
+                </h2>
+
+                <ul>
+                    <li><a href="#tools-required">Tools required to develop .NET 6.0 applications</a></li>
+                    <li><a href="#running-api">Run the example API locally</a></li>
+                    <li><a href="#testing-postman">Test the .NET API with Postman</a></li>
+                    <li><a href="#running-angular">Run an Angular app with the .NET API</a></li>
+                    <li><a href="#project-structure">.NET 6.0 Tutorial Project Structure</a></li>
+                </ul>
+
+                <div id="waldo-tag-12290" class="waldo-placeholder waldo-display-unit" data-processed="true" style="min-width: 728px; min-height: 90px;"></div><h2>
+                    <br>
+                    <a name="tools-required"></a>Tools required to run the .NET 6.0 Tutorial API Locally
+                </h2>
+
+                <p>To develop and run .NET 6.0 applications locally, download and&nbsp;install the following:</p>
+
+                <ul>
+                    <li><a href="https://dotnet.microsoft.com/download" target="_blank">.NET SDK</a>&nbsp;- includes the .NET runtime and command line tools</li>
+                    <li><a href="https://code.visualstudio.com/" target="_blank">Visual Studio Code</a>&nbsp;- code editor that runs on Windows, Mac and Linux</li>
+                    <li><a href="https://marketplace.visualstudio.com/items?itemName=ms-vscode.csharp" target="_blank">C# extension</a> for Visual Studio Code - adds support to VS Code for developing .NET applications</li>
+                </ul>
+
+                <h2>
+                    <br>
+                    <a name="running-api"></a>Run the .NET JWT with Refresh Tokens API Locally
+                </h2>
+
+                <ol>
+                    <li>Download or clone the tutorial project code from <a href="https://github.com/cornflourblue/dotnet-6-jwt-refresh-tokens-api" rel="nofollow" target="_blank">https://github.com/cornflourblue/dotnet-6-jwt-refresh-tokens-api</a></li>
+                    <li>Start the api by running <code>dotnet run</code> from the command line in the project root folder (where the WebApi.csproj file is located), you should see the message <code>Now listening on: http://localhost:4000</code>. Follow the instructions below to test with Postman or hook up with the example Angular application available.</li>
+                </ol>
+
+                <h4>
+                    <br>
+                    Debugging in VS Code
+                </h4>
+
+                <p>You can start the application in debug mode in VS Code by opening the project root folder in VS Code and pressing F5 or by selecting Debug -&gt; Start Debugging from the top menu. Running in debug mode allows you to attach breakpoints to pause execution and step through the application code. For more info on debugging .NET in VS Code see <a href="/post/2021/06/24/vs-code-net-debug-a-net-web-app-in-visual-studio-code">VS Code + .NET - Debug a .NET Web App in Visual Studio Code</a>.</p>
+
+                <h4>Before running in production</h4>
+
+                <p>Before running in production make sure that you update the <code>Secret</code> property in the <a href="#app-settings-json">appsettings.json</a> file, it is used to sign and verify JWT tokens for authentication, change it to a random string to ensure nobody else can generate a JWT with the same secret and gain unauthorized access to your API. A quick and easy way is join a couple of GUIDs together to make a long random string (e.g. from <a href="https://www.guidgenerator.com/" rel="nofollow" target="_blank">https://www.guidgenerator.com/</a>).</p>
+
+                <h2>
+                    <br>
+                    <a name="testing-postman"></a>Test the .NET API with Postman
+                </h2>
+
+                <p>Postman is a great tool for testing APIs, you can download it at <a href="https://www.postman.com/downloads" rel="nofollow" target="_blank">https://www.postman.com/downloads</a>.</p>
+
+                <p>Below are instrunctions on how to authenticate a user with Postman to get a JWT and refresh token from the API, how to use refresh tokens and revoke them, and how to fetch user details from secure routes with a JWT.</p>
+
+                <h3>How to authenticate a user with Postman</h3>
+
+                <p>To authenticate a user to get a JWT and refresh token follow these steps:</p>
+
+                <ol>
+                    <li>Open a new request tab by clicking the plus <strong>(+)</strong> button at the end of the tabs.</li>
+                    <li>Change the <strong>HTTP method</strong> to <strong>POST</strong> with the dropdown selector on the left of the URL input field.</li>
+                    <li>In the <strong>URL</strong> field enter the address to the authenticate route of your local API - <code>http://localhost:4000/users/authenticate</code>.</li>
+                    <li>Select the <strong>Body</strong> tab below the URL field, change the body type radio button to <strong>raw</strong>, and change the format dropdown selector to <strong>JSON</strong>.</li>
+                    <li>
+                        Enter a JSON object containing the test username and password in the <strong>Body</strong> textarea:
+                        <pre class=" language-javascript"><code class=" language-javascript"><span class="token punctuation">{</span>
+                        <span class="token string">"username"</span><span class="token punctuation">:</span> <span class="token string">"test"</span><span class="token punctuation">,</span>
+                        <span class="token string">"password"</span><span class="token punctuation">:</span> <span class="token string">"test"</span>
+<span class="token punctuation">}</span></code></pre>
+                    </li>
+                    <li>Click the <strong>Send</strong> button, you should receive a "200 OK" response containing the user details and a JWT token in the response body, and a cookie containing the refresh token.</li>
+                </ol>
+
+                <p>
+                    Here's a screenshot of Postman after the request is sent and the user has been authenticated:<br>
+                    <img src="/_content/images/jwt-refresh-tokens-api/authenticate-user.png">
+                </p>
+
+                <p>
+                    And this is the response cookies tab with the refresh token:<br>
+                    <img src="/_content/images/jwt-refresh-tokens-api/authenticate-user-cookies.png">
+                </p>
+
+                <h3>
+                    <br>
+                    How to refresh a token with Postman
+                </h3>
+
+                <p>This step can only be done after the above authenticate step because a valid refresh token cookie is required.</p>
+
+                <p>To use a refresh token cookie to get a new JWT token and a new refresh token follow these steps:</p>
+
+                <ol>
+                    <li>Open a new request tab by clicking the plus <strong>(+)</strong> button at the end of the tabs.</li>
+                    <li>Change the <strong>HTTP method</strong> to <strong>POST</strong> with the dropdown selector on the left of the URL input field.</li>
+                    <li>In the <strong>URL</strong> field enter the address to the refresh token route of your local API - <code>http://localhost:4000/users/refresh-token</code>.</li>
+                    <li>Click the <strong>Send</strong> button, you should receive a "200 OK" response containing the user details and a JWT token, and a cookie containing a new refresh token.</li>
+                    <li>Make a copy of the JWT value because we'll be using it in the next steps to access secure routes.</li>
+                </ol>
+
+                <p>
+                    Here's a screenshot of Postman after the request is sent and the token has been refreshed:<br>
+                    <img src="/_content/images/jwt-refresh-tokens-api/refresh-token.png">
+                </p>
+
+                <p>
+                    And this is the response cookies tab with the new refresh token:<br>
+                    <img src="/_content/images/jwt-refresh-tokens-api/refresh-token-cookies.png">
+                </p>
+
+                <h3>
+                    <br>
+                    How to make an authenticated request to retrieve all users
+                </h3>
+
+                <p>To make an authenticated request to get all users with the JWT token from the previous step, follow these steps:</p>
+
+                <ol>
+                    <li>Open a new request tab by clicking the plus <strong>(+)</strong> button at the end of the tabs.</li>
+                    <li>Change the <strong>HTTP method</strong> to <strong>GET</strong> with the dropdown selector on the left of the URL input field.</li>
+                    <li>In the <strong>URL</strong> field enter the address to the users route of your local API - <code>http://localhost:4000/users</code>.</li>
+                    <li>Select the <strong>Authorization</strong> tab below the URL field, change the type to <strong>&gt;Bearer Token</strong> in the type dropdown selector, and paste the JWT token from the previous step into the <strong>Token</strong> field.</li>
+                    <li>Click the <strong>Send</strong> button, you should receive a "200 OK" response containing a JSON array with all the user records in the system (just a single test user in the example).</li>
+                </ol>
+
+                <p>
+                    Here's a screenshot of Postman after making an authenticated request to get all users:<br>
+                    <img src="/_content/images/jwt-refresh-tokens-api/get-users.png">
+                </p>
+
+                <h3>
+                    <br>
+                    How to fetch all refresh tokens for a user
+                </h3>
+
+                <p>To get all refresh tokens for a user including active, expired and revoked tokens, follow these steps:</p>
+
+                <ol>
+                    <li>Open a new request tab by clicking the plus <strong>(+)</strong> button at the end of the tabs.</li>
+                    <li>Change the <strong>HTTP method</strong> to <strong>GET</strong> with the dropdown selector on the left of the URL input field.</li>
+                    <li>In the <strong>URL</strong> field enter the address to the users route of your local API - <code>http://localhost:4000/users/1/refresh-tokens</code>.</li>
+                    <li>Select the <strong>Authorization</strong> tab below the URL field, change the type to <strong>Bearer Token</strong> in the type dropdown selector, and paste the JWT token from the previous authenticate (or refresh token) step into the <strong>Token</strong> field.</li>
+                    <li>Click the <strong>Send</strong> button, you should receive a "200 OK" response containing a JSON array with all the test user's refresh tokens.</li>
+                    <li>Make a copy of the last token value (the active token) because we'll use it in the next step showing how to revoke a token.</li>
+                </ol>
+
+                <p>
+                    Here's a screenshot of Postman after making an authenticated request to get all refresh tokens for the test user:<br>
+                    <img src="/_content/images/jwt-refresh-tokens-api/get-refresh-tokens.png">
+                </p>
+
+                <h3>
+                    <br>
+                    How to revoke a token with Postman
+                </h3>
+
+                <p>To revoke a refresh token so it can no longer be used to generate new JWT tokens, follow these steps:</p>
+
+                <ol>
+                    <li>Open a new request tab by clicking the plus <strong>(+)</strong> button at the end of the tabs.</li>
+                    <li>Change the <strong>HTTP method</strong> to <strong>POST</strong> with the dropdown selector on the left of the URL input field.</li>
+                    <li>In the <strong>URL</strong> field enter the address to the authenticate route of your local API - <code>http://localhost:4000/users/revoke-token</code>.</li>
+                    <li>Select the <strong>Authorization</strong> tab below the URL field, change the type to <strong>Bearer Token</strong> in the type dropdown selector, and paste the JWT token from the previous authenticate (or refresh token) step into the <strong>Token</strong> field.</li>
+                    <li>Select the <strong>Body</strong> tab below the URL field, change the body type radio button to <strong>raw</strong>, and change the format dropdown selector to <strong>JSON</strong>.</li>
+                    <li>
+                        Enter a JSON object containing the active refresh token from the previous step in the <strong>Body</strong> textarea, e.g:
+                        <pre class=" language-javascript"><code class=" language-javascript"><span class="token punctuation">{</span>
+                        <span class="token string">"token"</span><span class="token punctuation">:</span> <span class="token string">"ENTER THE ACTIVE REFRESH TOKEN HERE"</span>
+<span class="token punctuation">}</span></code></pre>
+                    </li>
+                    <li>Click the <strong>Send</strong> button, you should receive a "200 OK" response with the message <code>Token revoked</code>.</li>
+                </ol>
+
+                <p>NOTE: You can also revoke the token in the <code>refreshToken</code> cookie with the <code>/users/revoke-token</code> route, to revoke the refresh token in the cookie simply send the same request with an empty body.</p>
+
+                <p>
+                    Here's a screenshot of Postman after making the request and the token has been revoked:<br>
+                    <img src="/_content/images/jwt-refresh-tokens-api/revoke-token.png">
+                </p>
+
+                <p>&nbsp;</p>
+
+                <h2>
+                    <br>
+                    <a name="running-angular"></a>Run an Angular app with the JWT Refresh Tokens API
+                </h2>
+
+                <p>For full details about the example Angular &nbsp;application see the post <a href="/post/2020/07/25/angular-10-jwt-authentication-with-refresh-tokens">Angular 10 - JWT Authentication with Refresh Tokens</a>. But to get up and running quickly just follow the below steps.</p>
+
+                <ol>
+                    <li>Install Node.js and npm from <a href="https://nodejs.org" rel="nofollow" target="_blank">https://nodejs.org</a>.</li>
+                    <li>Download or clone the Angular 10 tutorial code from <a href="https://github.com/cornflourblue/angular-10-jwt-refresh-tokens" rel="nofollow" target="_blank">https://github.com/cornflourblue/angular-10-jwt-refresh-tokens</a></li>
+                    <li>Install all required npm packages by running <code>npm install</code> from the command line in the project root folder (where the package.json is located).</li>
+                    <li>Remove or comment out the line below the comment <code>// provider used to create fake backend</code> located in the <code>/src/app/app.module.ts</code> file.</li>
+                    <li>Start the application by running <code>npm start</code> from the command line in the project root folder, this will launch a browser displaying the Angular example application and it should be hooked up with the .NET 6.0 JWT Refresh Tokens API that you already have running.</li>
+                </ol>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="project-structure"></a>.NET 6.0 Tutorial Project Structure</h2>
+
+                <p>The .NET tutorial project is organised into the following folders:</p>
+
+                <p>
+                    <strong>Authorization</strong><br>
+                    Contains the classes responsible for implementing custom JWT authentication and authorization in the api.
+                </p>
+
+                <p>
+                    <strong>Controllers</strong><br>
+                    Define the endpoints / routes for the web api, controllers are the gateways into the web api for client applications via http requests.
+                </p>
+
+                <p>
+                    <strong>Models</strong><br>
+                    Represent request and response models for controller methods, request models define the parameters for incoming requests, and response models define the data that is returned.
+                </p>
+
+                <p>
+                    <strong>Services</strong><br>
+                    Contain business logic, validation and&nbsp;database access code.
+                </p>
+
+                <p>
+                    <strong>Entities</strong><br>
+                    Represent the application data that is stored in the database.<br>
+                    Entity Framework Core (EF Core) maps relational data from the database to instances of C# entity objects to be used within the application for data management and CRUD operations.
+                </p>
+
+                <p>
+                    <strong>Helpers</strong><br>
+                    Anything that doesn't fit into the above folders.
+                </p>
+
+                <p>Click any of the below links to jump down to a description of each file along with its code:</p>
+
+                <ul>
+                    <li>
+                        Authorization
+                        <ul>
+                            <li><a href="#allow-anonymous-attribute-cs">AllowAnonymousAttribute.cs</a></li>
+                            <li><a href="#authorize-attribute-cs">AuthorizeAttribute.cs</a></li>
+                            <li><a href="#jwt-middleware-cs">JwtMiddleware.cs</a></li>
+                            <li><a href="#jwt-utils-cs">JwtUtils.cs</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        Controllers
+                        <ul>
+                            <li><a href="#users-controller-cs">UsersController.cs</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        Entities
+                        <ul>
+                            <li><a href="#refresh-token-cs">RefreshToken.cs</a></li>
+                            <li><a href="#user-cs">User.cs</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        Helpers
+                        <ul>
+                            <li><a href="#app-exception-cs">AppException.cs</a></li>
+                            <li><a href="#app-settings-cs">AppSettings.cs</a></li>
+                            <li><a href="#data-context-cs">DataContext.cs</a></li>
+                            <li><a href="#error-handler-middleware-cs">ErrorHandlerMiddleware.cs</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        Models
+                        <ul>
+                            <li>
+                                Users
+                                <ul>
+                                    <li><a href="#authenticate-request-cs">AuthenticateRequest.cs</a></li>
+                                    <li><a href="#authenticate-response-cs">AuthenticateResponse.cs</a></li>
+                                    <li><a href="#revoke-token-request-cs">RevokeTokenRequest.cs</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        Services
+                        <ul>
+                            <li><a href="#user-service-cs">UserService.cs</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="#app-settings-json">appsettings.json</a></li>
+                    <li><a href="#omnisharp-json">omnisharp.json</a></li>
+                    <li><a href="#program-cs">Program.cs</a></li>
+                    <li><a href="#web-api-csproj">WebApi.csproj</a></li>
+                </ul>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="allow-anonymous-attribute-cs"></a>.NET Allow Anonymous Attribute</h2>
+
+                <div><strong>Path: /Authorization/AllowAnonymousAttribute.cs</strong></div>
+
+                <p>The custom <code>[AllowAnonymous]</code> attribute is used to allow anonymous access to specified action methods of controllers that are decorated with the <code>[Authorize]</code> attribute. It's used in the <a href="#users-controller-cs">users controller</a> to allow anonymous access to the <em>authenticate</em> and <em>refresh-token</em> action methods. The custom <a href="#authorize-attribute-cs">authorize attribute</a> below skips authorization if the action method is decorated with <code>[AllowAnonymous]</code>.</p>
+
+                <p>I created a custom allow anonymous (instead of using the built in one) for consistency and to avoid ambiguous reference errors between namespaces.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Authorization;
+
+[AttributeUsage(AttributeTargets.Method)]
+public class AllowAnonymousAttribute : Attribute
+{ }</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="authorize-attribute-cs"></a>.NET Custom Authorize Attribute</h2>
+
+                <div><strong>Path: /Authorization/AuthorizeAttribute.cs</strong></div>
+
+                <p>The custom <code>[Authorize]</code> attribute is used to restrict access to controllers or specified action methods. Only authorized requests are allowed to access action methods that are decorated with the <code>[Authorize]</code> attribute.</p>
+
+                <p>When a controller is decorated with the <code>[Authorize]</code> attribute <em>all</em> action methods in the controller are restricted to authorized requests, except for methods decorated with the custom <code>[AllowAnonymous]</code> attribute above.</p>
+
+                <p>Authorization is performed by the <code>OnAuthorization</code> method which checks if there is an authenticated user attached to the current request (<code>context.HttpContext.Items["User"]</code>). An authenticated user is attached by the <a href="#jwt-middleware-cs">custom jwt middleware</a> if the request contains a valid JWT access token.</p>
+
+                <p>On successful authorization no action is taken and the request is passed through to the controller action method, if authorization fails a <code>401 Unauthorized</code> response is returned.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Authorization;
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using WebApi.Entities;
+
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
+public class AuthorizeAttribute : Attribute, IAuthorizationFilter
+{
+    public void OnAuthorization(AuthorizationFilterContext context)
+    {
+        // skip authorization if action is decorated with [AllowAnonymous] attribute
+        var allowAnonymous = context.ActionDescriptor.EndpointMetadata.OfType&lt;AllowAnonymousAttribute&gt;().Any();
+        if (allowAnonymous)
+            return;
+
+        // authorization
+        var user = (User)context.HttpContext.Items["User"];
+        if (user == null)
+            context.Result = new JsonResult(new { message = "Unauthorized" }) { StatusCode = StatusCodes.Status401Unauthorized };
+    }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="jwt-middleware-cs"></a>.NET Custom JWT Middleware</h2>
+
+                <div><strong>Path: /Authorization/JwtMiddleware.cs</strong></div>
+
+                <p>The custom JWT middleware extracts the JWT token from the request <code>Authorization</code> header (if there is one) and validates it with the <code>jwtUtils.ValidateToken()</code> method. If validation is successful the user id from the token is returned, and the authenticated user object is attached to the <code>HttpContext.Items</code> collection to make it accessible within the scope of the current request.</p>
+
+                <p>If token validation fails or there is no token, the request is only allowed to access public (anonymous) routes because there isn't an authenticated user object attached to the HTTP context. The authorization logic that checks if the user object is attached is located in the <a href="#authorize-attribute-cs">custom authorize attribute</a>, and if authorization fails it returns a <code>401 Unauthorized</code> response.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Authorization;
+
+using Microsoft.Extensions.Options;
+using WebApi.Helpers;
+using WebApi.Services;
+
+public class JwtMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly AppSettings _appSettings;
+
+    public JwtMiddleware(RequestDelegate next, IOptions&lt;AppSettings&gt; appSettings)
+    {
+        _next = next;
+        _appSettings = appSettings.Value;
+    }
+
+    public async Task Invoke(HttpContext context, IUserService userService, IJwtUtils jwtUtils)
+    {
+        var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
+        var userId = jwtUtils.ValidateJwtToken(token);
+        if (userId != null)
+        {
+            // attach user to context on successful jwt validation
+            context.Items["User"] = userService.GetById(userId.Value);
+        }
+
+        await _next(context);
+    }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="jwt-utils-cs"></a>.NET JWT Utils</h2>
+
+                <div><strong>Path: /Authorization/JwtUtils.cs</strong></div>
+
+                <p>The JWT utils class contains methods for generating and validating JWT tokens, and generating refresh tokens.</p>
+
+                <p>The <code>GenerateJwtToken()</code> method returns a short lived JWT token that expires after 15 minutes, it contains the id of the specified <code>user</code> as the <code>"id"</code> claim, meaning the token payload will contain the property <code>"id": &lt;userId&gt;</code> (e.g. <code>"id": 1</code>). The token is created with the <code>JwtSecurityTokenHandler</code> class and digitally signed using the secret key stored in the <a href="#app-settings-json">app settings</a> file.</p>
+
+                <p>The <code>ValidateJwtToken()</code> method attempts to validate the provided JWT token and return the user id (<code>"id"</code>) from the token claims. If validation fails null is returned.</p>
+
+                <p>The <code>GenerateRefreshToken()</code> method returns a new refresh token that expires after 7 days. The created date and user ip address are saved with the token to create an audit trail and to help identify any unusual activity. The local <code>getUniqueToken()</code> method returns a guaranteed unique refresh token string by verifying that it doesn't already exist in the database.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Authorization;
+
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using WebApi.Entities;
+using WebApi.Helpers;
+
+public interface IJwtUtils
+{
+    public string GenerateJwtToken(User user);
+    public int? ValidateJwtToken(string token);
+    public RefreshToken GenerateRefreshToken(string ipAddress);
+}
+
+public class JwtUtils : IJwtUtils
+{
+    private DataContext _context;
+    private readonly AppSettings _appSettings;
+
+    public JwtUtils(
+        DataContext context,
+        IOptions&lt;AppSettings&gt; appSettings)
+    {
+        _context = context;
+        _appSettings = appSettings.Value;
+    }
+
+    public string GenerateJwtToken(User user)
+    {
+        // generate token that is valid for 15 minutes
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(new[] { new Claim("id", user.Id.ToString()) }),
+            Expires = DateTime.UtcNow.AddMinutes(15),
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+        return tokenHandler.WriteToken(token);
+    }
+
+    public int? ValidateJwtToken(string token)
+    {
+        if (token == null)
+            return null;
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
+        try
+        {
+            tokenHandler.ValidateToken(token, new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(key),
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                // set clockskew to zero so tokens expire exactly at token expiration time (instead of 5 minutes later)
+                ClockSkew = TimeSpan.Zero
+            }, out SecurityToken validatedToken);
+
+            var jwtToken = (JwtSecurityToken)validatedToken;
+            var userId = int.Parse(jwtToken.Claims.First(x =&gt; x.Type == "id").Value);
+
+            // return user id from JWT token if validation successful
+            return userId;
+        }
+        catch
+        {
+            // return null if validation fails
+            return null;
+        }
+    }
+
+    public RefreshToken GenerateRefreshToken(string ipAddress)
+    {
+        var refreshToken = new RefreshToken
+        {
+            Token = getUniqueToken(),
+            // token is valid for 7 days
+            Expires = DateTime.UtcNow.AddDays(7),
+            Created = DateTime.UtcNow,
+            CreatedByIp = ipAddress
+        };
+
+        return refreshToken;
+
+        string getUniqueToken()
+        {
+            // token is a cryptographically strong random sequence of values
+            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+            // ensure token is unique by checking against db
+            var tokenIsUnique = !_context.Users.Any(u =&gt; u.RefreshTokens.Any(t =&gt; t.Token == token));
+
+            if (!tokenIsUnique)
+                return getUniqueToken();
+            
+            return token;
+        }
+    }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="users-controller-cs"></a>.NET Users Controller</h2>
+
+                <div><strong>Path: /Controllers/UsersController.cs</strong></div>
+
+                <p>The .NET users controller defines and handles all routes / endpoints for the api that relate to users, including authentication, refreshing and revoking tokens, and fetching users and refresh tokens. Within each route the controller calls the <a href="#user-service-cs">user service</a> to perform the action required, this is done to keep the controller <em>lean</em> and to maintain a clean <em>separation of concerns</em> between the route handling code in the controller and the business logic + data access code in the service.</p>
+
+                <p>The controller actions are secured with JWT using the <code>[Authorize]</code> attribute, with the exception of the <code>Authenticate</code> and <code>RefreshToken</code> methods which allow public access by overriding the <code>[Authorize]</code> attribute on the controller with an <code>[AllowAnonymous]</code> attribute on each action method. I chose this approach so any new action methods added to the controller will be secure by default unless explicitly made public.</p>
+
+                <p>The <code>setTokenCookie()</code> helper method appends an HTTP Only cookie with a refresh token to the response. HTTP Only cookies are used to increase security because they are not accessible to client-side javascript which prevents XSS (cross site scripting) attacks, and refresh tokens only have access to generate new JWT tokens (via the <code>/users/refresh-token</code> route) which prevents them from being used in CSRF (cross site request forgery) attacks.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Controllers;
+
+using Microsoft.AspNetCore.Mvc;
+using WebApi.Authorization;
+using WebApi.Models.Users;
+using WebApi.Services;
+
+[Authorize]
+[ApiController]
+[Route("[controller]")]
+public class UsersController : ControllerBase
+{
+    private IUserService _userService;
+
+    public UsersController(IUserService userService)
+    {
+        _userService = userService;
+    }
+
+    [AllowAnonymous]
+    [HttpPost("authenticate")]
+    public IActionResult Authenticate(AuthenticateRequest model)
+    {
+        var response = _userService.Authenticate(model, ipAddress());
+        setTokenCookie(response.RefreshToken);
+        return Ok(response);
+    }
+
+    [AllowAnonymous]
+    [HttpPost("refresh-token")]
+    public IActionResult RefreshToken()
+    {
+        var refreshToken = Request.Cookies["refreshToken"];
+        var response = _userService.RefreshToken(refreshToken, ipAddress());
+        setTokenCookie(response.RefreshToken);
+        return Ok(response);
+    }
+
+    [HttpPost("revoke-token")]
+    public IActionResult RevokeToken(RevokeTokenRequest model)
+    {
+        // accept refresh token in request body or cookie
+        var token = model.Token ?? Request.Cookies["refreshToken"];
+
+        if (string.IsNullOrEmpty(token))
+            return BadRequest(new { message = "Token is required" });
+
+        _userService.RevokeToken(token, ipAddress());
+        return Ok(new { message = "Token revoked" });
+    }
+
+    [HttpGet]
+    public IActionResult GetAll()
+    {
+        var users = _userService.GetAll();
+        return Ok(users);
+    }
+
+    [HttpGet("{id}")]
+    public IActionResult GetById(int id)
+    {
+        var user = _userService.GetById(id);
+        return Ok(user);
+    }
+
+    [HttpGet("{id}/refresh-tokens")]
+    public IActionResult GetRefreshTokens(int id)
+    {
+        var user = _userService.GetById(id);
+        return Ok(user.RefreshTokens);
+    }
+
+    // helper methods
+
+    private void setTokenCookie(string token)
+    {
+        // append cookie with refresh token to the http response
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Expires = DateTime.UtcNow.AddDays(7)
+        };
+        Response.Cookies.Append("refreshToken", token, cookieOptions);
+    }
+
+    private string ipAddress()
+    {
+        // get source ip address for the current request
+        if (Request.Headers.ContainsKey("X-Forwarded-For"))
+            return Request.Headers["X-Forwarded-For"];
+        else
+            return HttpContext.Connection.RemoteIpAddress.MapToIPv4().ToString();
+    }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="refresh-token-cs"></a>.NET Refresh Token Entity</h2>
+
+                <div><strong>Path: /Entities/RefreshToken.cs</strong></div>
+
+                <p>The refresh token entity class represents the data stored in the database for refresh tokens.</p>
+
+                <p>Entity classes are also used to pass data between different parts of the application (e.g. between services and controllers) and can be used to return http response data from controller action methods.</p>
+
+                <p>The <code>[Owned]</code> attribute marks the refresh token class as an <em>owned entity type</em>, meaning it can only exist as a child / dependant of another entity class. In this example a refresh token is always owned by a <a href="#user-cs">user entity</a>.</p>
+
+                <p>The <code>[Key]</code> attribute explicitly sets the <code>Id</code> property as the primary key in the refresh token database table, this usually is not required since Entity Framework automatically looks for a property named <code>Id</code> to set as the primary key, however the <code>[Owned]</code> attribute causes Entity Framework to create a <em>composite primary key</em> consisting of the id and <em>owner</em> id (refresh token id + user id) which can cause errors with auto generated id fields. Explicit use of the <code>[Key]</code> attribute prevents a composite primary key from being created by the <code>[Owned]</code> attribute.</p>
+
+                <p>The <code>[JsonIgnore]</code> attribute prevents the id from being serialized and returned with refresh token data in api responses.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Entities;
+
+using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
+
+[Owned]
+public class RefreshToken
+{
+    [Key]
+    [JsonIgnore]
+    public int Id { get; set; }
+    public string Token { get; set; }
+    public DateTime Expires { get; set; }
+    public DateTime Created { get; set; }
+    public string CreatedByIp { get; set; }
+    public DateTime? Revoked { get; set; }
+    public string RevokedByIp { get; set; }
+    public string ReplacedByToken { get; set; }
+    public string ReasonRevoked { get; set; }
+    public bool IsExpired =&gt; DateTime.UtcNow &gt;= Expires;
+    public bool IsRevoked =&gt; Revoked != null;
+    public bool IsActive =&gt; !IsRevoked &amp;&amp; !IsExpired;
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="user-cs"></a>.NET User Entity</h2>
+
+                <div><strong>Path: /Entities/User.cs</strong></div>
+
+                <p>The user entity class represents the data stored in the database for users.</p>
+
+                <p>Entity classes are also used to pass data between different parts of the application (e.g. between services and controllers) and can be used to return http response data from controller action methods.</p>
+
+                <p>The <code>[JsonIgnore]</code> attribute prevents the <code>PasswordHash</code> and <code>RefreshTokens</code> properties from being serialized and returned with user data in api responses. There is a dedicated route for fetching refresh token data (<code>/users/{id}/refresh-tokens</code>).</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Entities;
+
+using System.Text.Json.Serialization;
+
+public class User
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Username { get; set; }
+
+    [JsonIgnore]
+    public string PasswordHash { get; set; }
+
+    [JsonIgnore]
+    public List&lt;RefreshToken&gt; RefreshTokens { get; set; }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="app-exception-cs"></a>.NET Custom App Exception</h2>
+
+                <div><strong>Path: /Helpers/AppException.cs</strong></div>
+
+                <p>The app exception is a custom exception class used to differentiate between <em>handled</em> and <em>unhandled</em> exceptions in the .NET API. Handled exceptions are generated by application code and used to return friendly error messages, for example business logic or validation exceptions caused by invalid request parameters, whereas unhandled exceptions are generated by the .NET framework or caused by bugs in application code.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Helpers;
+
+using System.Globalization;
+
+// custom exception class for throwing application specific exceptions (e.g. for validation) 
+// that can be caught and handled within the application
+public class AppException : Exception
+{
+    public AppException() : base() {}
+
+    public AppException(string message) : base(message) { }
+
+    public AppException(string message, params object[] args) 
+        : base(String.Format(CultureInfo.CurrentCulture, message, args))
+    {
+    }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="app-settings-cs"></a>.NET App Settings Class</h2>
+
+                <div><strong>Path: /Helpers/AppSettings.cs</strong></div>
+
+                <p>The app settings class contains properties defined in the <a href="#app-settings-json">appsettings.json</a> file and is used for accessing application settings via objects that are injected into classes using the .NET built in dependency injection (DI) system. For example the <a href="#user-service-cs">user service</a> accesses app settings via an <code>IOptions&lt;AppSettings&gt; appSettings</code> object that is injected into the constructor.</p>
+
+                <p>Mapping of configuration sections to classes is done in the <a href="#program-cs">Program.cs</a> file.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Helpers;
+
+public class AppSettings
+{
+    public string Secret { get; set; }
+
+    // refresh token time to live (in days), inactive tokens are
+    // automatically deleted from the database after this time
+    public int RefreshTokenTTL { get; set; }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="data-context-cs"></a>.NET Data Context</h2>
+
+                <div><strong>Path: /Helpers/DataContext.cs</strong></div>
+
+                <p>The data context class is used for accessing application data through Entity Framework. It derives from the Entity Framework <code>DbContext</code> class and has a public <code>Users</code> property for accessing and managing user data. The data context is used by the <a href="#user-service-cs">user service</a> for handling all low level data (CRUD) operations.</p>
+
+                <p><code>options.UseInMemoryDatabase()</code> configures Entity Framework to create and connect to an in-memory database so the API can be tested without a real database, this can be easily updated to connect to a real db server such as SQL Server, Oracle, MySql etc. For an example api that uses SQLite in development and SQL Server in production see <a href="/post/2022/01/07/net-6-user-registration-and-login-tutorial-with-example-api">.NET 6.0 - User Registration and Login Tutorial with Example API</a>.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Helpers;
+
+using Microsoft.EntityFrameworkCore;
+using WebApi.Entities;
+
+public class DataContext : DbContext
+{
+    public DbSet&lt;User&gt; Users { get; set; }
+
+    private readonly IConfiguration Configuration;
+
+    public DataContext(IConfiguration configuration)
+    {
+        Configuration = configuration;
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder options)
+    {
+        // in memory database used for simplicity, change to a real db for production applications
+        options.UseInMemoryDatabase("TestDb");
+    }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="error-handler-middleware-cs"></a>.NET Global Error Handler Middleware</h2>
+
+                <div><strong>Path: /Helpers/ErrorHandlerMiddleware.cs</strong></div>
+
+                <p>The global error handler is used catch all errors and remove the need for duplicated error handling code throughout the .NET api. It's configured as middleware in the <a href="#program-cs">Porgram.cs</a> file.</p>
+
+                <p>Errors of type <code>AppException</code> are treated as custom (app specific) errors that return a <code>400 Bad Request</code> response, the .NET built-in <code>KeyNotFoundException</code> class is used to return <code>404 Not Found</code> responses, all other exceptions are unhandled and return a <code>500 Internal Server Error</code> response.</p>
+
+                <p>See the <a href="#user-service-cs">user service</a> for examples of custom errors and not found errors thrown by the api.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Helpers;
+
+using System.Net;
+using System.Text.Json;
+
+public class ErrorHandlerMiddleware
+{
+    private readonly RequestDelegate _next;
+
+    public ErrorHandlerMiddleware(RequestDelegate next)
+    {
+        _next = next;
+    }
+
+    public async Task Invoke(HttpContext context)
+    {
+        try
+        {
+            await _next(context);
+        }
+        catch (Exception error)
+        {
+            var response = context.Response;
+            response.ContentType = "application/json";
+
+            switch(error)
+            {
+                case AppException e:
+                    // custom application error
+                    response.StatusCode = (int)HttpStatusCode.BadRequest;
+                    break;
+                case KeyNotFoundException e:
+                    // not found error
+                    response.StatusCode = (int)HttpStatusCode.NotFound;
+                    break;
+                default:
+                    // unhandled error
+                    response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                    break;
+            }
+
+            var result = JsonSerializer.Serialize(new { message = error?.Message });
+            await response.WriteAsync(result);
+        }
+    }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="authenticate-request-cs"></a>.NET Authenticate Request Model</h2>
+
+                <div><strong>Path: /Models/Users/AuthenticateRequest.cs</strong></div>
+
+                <p>The authenticate request model defines the parameters for incoming POST requests to the <code>/users/authenticate</code> route, it is attached to the route by setting it as the parameter to the <code>Authenticate</code> action method of the <a href="#users-controller-cs">users controller</a>. When an HTTP POST request is received by the route, the data from the body is bound to an instance of the <code>AuthenticateRequest</code> class, validated and passed to the method.</p>
+
+                <p>.NET Data Annotations are used to automatically handle model validation, the <code>[Required]</code> attribute sets both the username and password as required fields so if either are missing a validation error message is returned from the api.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Models.Users;
+
+using System.ComponentModel.DataAnnotations;
+
+public class AuthenticateRequest
+{
+    [Required]
+    public string Username { get; set; }
+
+    [Required]
+    public string Password { get; set; }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="authenticate-response-cs"></a>.NET Authenticate Response Model</h2>
+
+                <div><strong>Path: /Models/Users/AuthenticateResponse.cs</strong></div>
+
+                <p>The authenticate response model defines the data returned by the <code>Authenticate</code> method of the <a href="#users-controller-cs">users controller</a> after successful authentication. It includes basic user details, a JWT token and a refresh token.</p>
+
+                <p>The refresh token is decorated with the <code>[JsonIgnore]</code> attribute to prevent it from being returned in the response body because it is returned in an HTTP Only cookie. An HTTP Only cookie increases security because it is not accessible to client-side javascript which prevents XSS (cross site scripting), and a refresh token only has access to generate a new JWT token (via the <code>/users/refresh-token</code> route) which prevents it from being used in CSRF (cross site request forgery).</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Models.Users;
+
+using System.Text.Json.Serialization;
+using WebApi.Entities;
+
+public class AuthenticateResponse
+{
+    public int Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Username { get; set; }
+    public string JwtToken { get; set; }
+
+    [JsonIgnore] // refresh token is returned in http only cookie
+    public string RefreshToken { get; set; }
+
+    public AuthenticateResponse(User user, string jwtToken, string refreshToken)
+    {
+        Id = user.Id;
+        FirstName = user.FirstName;
+        LastName = user.LastName;
+        Username = user.Username;
+        JwtToken = jwtToken;
+        RefreshToken = refreshToken;
+    }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="revoke-token-request-cs"></a>.NET Revoke Token Request Model</h2>
+
+                <div><strong>Path: /Models/Users/RevokeTokenRequest.cs</strong></div>
+
+                <p>The revoke token request model defines the parameters for incoming POST requests to the <code>/users/revoke-token</code> route of the api, it is attached to the route by setting it as the parameter to the <code>RevokeToken</code> action method of the <a href="#users-controller-cs">users controller</a>. When an HTTP POST request is received by the route, the data from the body is bound to an instance of the <code>RevokeToken</code> class, validated and passed to the method.</p>
+
+                <p>The <code>Token</code> property is optional in the request body because the route also supports revoking the token sent in the <code>refreshToken</code> cookie. If both are present priority is given to the token in the request body.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Models.Users;
+
+public class RevokeTokenRequest
+{
+    public string Token { get; set; }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="user-service-cs"></a>.NET User Service</h2>
+
+                <div><strong>Path: /Services/UserService.cs</strong></div>
+
+                <p>The user service contains the core logic for authentication, generating JWT and refresh tokens, refreshing and revoking tokens, and fetching user data.</p>
+
+                <p>The top of the <code>UserService.cs</code> file contains the <code>IUserService</code> interface which defines the public methods for the user service, below the interface is the concrete <code>UserService</code> class that implements the interface.</p>
+
+                <p>The <code>Authenticate()</code> method finds a user by username and verifies the password against the hashed password in the database using BCrypt, on success the user details are returned with a JWT and a refresh token. For more info on hashing and verifying passwords see <a href="/post/2022/01/16/net-6-hash-and-verify-passwords-with-bcrypt">.NET 6.0 - Hash and Verify Passwords with BCrypt</a>.</p>
+
+                <p>The <code>RefreshToken()</code> method accepts an active refresh token and returns the user details with a new JWT token and a new refresh token. The old refresh token (the one used to make the request) is revoked and can no longer be used, this technique is known as <em>refresh token rotation</em> and increases security by making refresh tokens short lived. When a refresh token is <em>rotated</em> the new token is saved in the <code>ReplacedByToken</code> field of the revoked token to create an audit trail in the database.</p>
+
+                <p>If an attempt is made to use a revoked refresh token, the API treats it as a potentially malicious user with a stolen (revoked) refresh token, or a valid user attempting to access the system after their token has been revoked by a malicious user with a stolen (active) refresh token. In either case the API revokes all descendant tokens because the token and its descendants were likely created on the same device which may have been compromised.</p>
+
+                <p>The <code>RevokeToken()</code> method accepts an active refresh token and revokes it so it can no longer be used. A token is revoked when it has a <code>Revoked</code> date. The source ip address of the request that revoked the token is saved in the <code>RevokedByIp</code> field.</p>
+
+                <p>The <code>GetAll()</code> method returns a list of all users in the system, and the <code>GetById()</code> method returns the user with the specified id.</p>
+
+                <p>Revoked and expired refresh tokens are kept in the database for the number of days set in the <code>RefreshTokenTTL</code> property in the <a href="#app-settings-json">appsettings.json</a> file. The default is 2 days, after which old inactive (revoked or expired) tokens are deleted by the <code>Authenticate()</code> and <code>RefreshToken()</code> methods.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">namespace WebApi.Services;
+
+using BCrypt.Net;
+using Microsoft.Extensions.Options;
+using WebApi.Entities;
+using WebApi.Helpers;
+using WebApi.Models.Users;
+using WebApi.Authorization;
+
+public interface IUserService
+{
+    AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress);
+    AuthenticateResponse RefreshToken(string token, string ipAddress);
+    void RevokeToken(string token, string ipAddress);
+    IEnumerable&lt;User&gt; GetAll();
+    User GetById(int id);
+}
+
+public class UserService : IUserService
+{
+    private DataContext _context;
+    private IJwtUtils _jwtUtils;
+    private readonly AppSettings _appSettings;
+
+    public UserService(
+        DataContext context,
+        IJwtUtils jwtUtils,
+        IOptions&lt;AppSettings&gt; appSettings)
+    {
+        _context = context;
+        _jwtUtils = jwtUtils;
+        _appSettings = appSettings.Value;
+    }
+
+    public AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress)
+    {
+        var user = _context.Users.SingleOrDefault(x =&gt; x.Username == model.Username);
+
+        // validate
+        if (user == null || !BCrypt.Verify(model.Password, user.PasswordHash))
+            throw new AppException("Username or password is incorrect");
+
+        // authentication successful so generate jwt and refresh tokens
+        var jwtToken = _jwtUtils.GenerateJwtToken(user);
+        var refreshToken = _jwtUtils.GenerateRefreshToken(ipAddress);
+        user.RefreshTokens.Add(refreshToken);
+
+        // remove old refresh tokens from user
+        removeOldRefreshTokens(user);
+
+        // save changes to db
+        _context.Update(user);
+        _context.SaveChanges();
+
+        return new AuthenticateResponse(user, jwtToken, refreshToken.Token);
+    }
+
+    public AuthenticateResponse RefreshToken(string token, string ipAddress)
+    {
+        var user = getUserByRefreshToken(token);
+        var refreshToken = user.RefreshTokens.Single(x =&gt; x.Token == token);
+
+        if (refreshToken.IsRevoked)
+        {
+            // revoke all descendant tokens in case this token has been compromised
+            revokeDescendantRefreshTokens(refreshToken, user, ipAddress, $"Attempted reuse of revoked ancestor token: {token}");
+            _context.Update(user);
+            _context.SaveChanges();
+        }
+
+        if (!refreshToken.IsActive)
+            throw new AppException("Invalid token");
+
+        // replace old refresh token with a new one (rotate token)
+        var newRefreshToken = rotateRefreshToken(refreshToken, ipAddress);
+        user.RefreshTokens.Add(newRefreshToken);
+
+        // remove old refresh tokens from user
+        removeOldRefreshTokens(user);
+
+        // save changes to db
+        _context.Update(user);
+        _context.SaveChanges();
+
+        // generate new jwt
+        var jwtToken = _jwtUtils.GenerateJwtToken(user);
+
+        return new AuthenticateResponse(user, jwtToken, newRefreshToken.Token);
+    }
+
+    public void RevokeToken(string token, string ipAddress)
+    {
+        var user = getUserByRefreshToken(token);
+        var refreshToken = user.RefreshTokens.Single(x =&gt; x.Token == token);
+
+        if (!refreshToken.IsActive)
+            throw new AppException("Invalid token");
+
+        // revoke token and save
+        revokeRefreshToken(refreshToken, ipAddress, "Revoked without replacement");
+        _context.Update(user);
+        _context.SaveChanges();
+    }
+
+    public IEnumerable&lt;User&gt; GetAll()
+    {
+        return _context.Users;
+    }
+
+    public User GetById(int id)
+    {
+        var user = _context.Users.Find(id);
+        if (user == null) throw new KeyNotFoundException("User not found");
+        return user;
+    }
+
+    // helper methods
+
+    private User getUserByRefreshToken(string token)
+    {
+        var user = _context.Users.SingleOrDefault(u =&gt; u.RefreshTokens.Any(t =&gt; t.Token == token));
+
+        if (user == null)
+            throw new AppException("Invalid token");
+
+        return user;
+    }
+
+    private RefreshToken rotateRefreshToken(RefreshToken refreshToken, string ipAddress)
+    {
+        var newRefreshToken = _jwtUtils.GenerateRefreshToken(ipAddress);
+        revokeRefreshToken(refreshToken, ipAddress, "Replaced by new token", newRefreshToken.Token);
+        return newRefreshToken;
+    }
+
+    private void removeOldRefreshTokens(User user)
+    {
+        // remove old inactive refresh tokens from user based on TTL in app settings
+        user.RefreshTokens.RemoveAll(x =&gt; 
+            !x.IsActive &amp;&amp; 
+            x.Created.AddDays(_appSettings.RefreshTokenTTL) &lt;= DateTime.UtcNow);
+    }
+
+    private void revokeDescendantRefreshTokens(RefreshToken refreshToken, User user, string ipAddress, string reason)
+    {
+        // recursively traverse the refresh token chain and ensure all descendants are revoked
+        if(!string.IsNullOrEmpty(refreshToken.ReplacedByToken))
+        {
+            var childToken = user.RefreshTokens.SingleOrDefault(x =&gt; x.Token == refreshToken.ReplacedByToken);
+            if (childToken.IsActive)
+                revokeRefreshToken(childToken, ipAddress, reason);
+            else
+                revokeDescendantRefreshTokens(childToken, user, ipAddress, reason);
+        }
+    }
+
+    private void revokeRefreshToken(RefreshToken token, string ipAddress, string reason = null, string replacedByToken = null)
+    {
+        token.Revoked = DateTime.UtcNow;
+        token.RevokedByIp = ipAddress;
+        token.ReasonRevoked = reason;
+        token.ReplacedByToken = replacedByToken;
+    }
+}</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="app-settings-json"></a>.NET App Settings</h2>
+
+                <div><strong>Path: /appsettings.json</strong></div>
+
+                <p>Root configuration file containing application settings for all environments, it includes the <code>Secret</code> used for signing and verifying JWT tokens and the refresh token time to live (<code>RefreshTokenTTL</code>) which sets the number of days to keep inactive refresh tokens in the database</p>
+
+                <p>IMPORTANT: The <code>"Secret"</code> property is used to sign and verify JWT tokens for authentication, change it to a random string to ensure nobody else can generate a JWT with the same secret and gain unauthorized access to your api. A quick and easy way is join a couple of GUIDs together to make a long random string (e.g. from <a href="https://www.guidgenerator.com/" rel="nofollow" target="_blank">https://www.guidgenerator.com/</a>).</p>
+
+<pre class="line-numbers language-javascript"><code class=" language-javascript"><span class="token punctuation">{</span>
+                <span class="token string">"AppSettings"</span><span class="token punctuation">:</span> <span class="token punctuation">{</span>
+                <span class="token string">"Secret"</span><span class="token punctuation">:</span> <span class="token string">"THIS IS USED TO SIGN AND VERIFY JWT TOKENS, REPLACE IT WITH YOUR OWN SECRET, IT CAN BE ANY STRING"</span><span class="token punctuation">,</span>
+                <span class="token string">"RefreshTokenTTL"</span><span class="token punctuation">:</span> <span class="token number">2</span>
+                <span class="token punctuation">}</span><span class="token punctuation">,</span>
+                <span class="token string">"Logging"</span><span class="token punctuation">:</span> <span class="token punctuation">{</span>
+                <span class="token string">"LogLevel"</span><span class="token punctuation">:</span> <span class="token punctuation">{</span>
+                <span class="token string">"Default"</span><span class="token punctuation">:</span> <span class="token string">"Information"</span><span class="token punctuation">,</span>
+                <span class="token string">"Microsoft.AspNetCore"</span><span class="token punctuation">:</span> <span class="token string">"Warning"</span>
+                <span class="token punctuation">}</span>
+                <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="omnisharp-json"></a>OmniSharp Config</h2>
+
+                <div><strong>Path: /omnisharp.json</strong></div>
+
+                <p>This file contains configuration options for the C# extension in VS Code. The <code>useBundledOnly</code> option tells the C# extension to use the bundled version of MSBuild instead of the global version to prevent errors if you have an older version of MSBuild installed globally (e.g. as part of Visual Studio).</p>
+
+<pre class="line-numbers language-javascript"><code class=" language-javascript"><span class="token punctuation">{</span>
+                <span class="token string">"msbuild"</span><span class="token punctuation">:</span> <span class="token punctuation">{</span>
+                <span class="token string">"useBundledOnly"</span><span class="token punctuation">:</span> <span class="token boolean">true</span>
+                <span class="token punctuation">}</span>
+<span class="token punctuation">}</span></code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="program-cs"></a>.NET Program</h2>
+
+                <div><strong>Path: /Program.cs</strong></div>
+
+                <p>The .NET 6 Program file contains <em>top-level statements</em> which are converted by the new C# 10 compiler into a <code>Main()</code> method and class for the .NET program. The <code>Main()</code> method is the entry point for a .NET application, when an app is started it searches for the <code>Main()</code> method to begin execution. The top-level statements can be located anywhere in the project but are typically placed in the <code>Program.cs</code> file, only one file can contain top-level statements within a .NET application.</p>
+
+                <p>The <code>WebApplication</code> class handles app startup, lifetime management, web server configuration and more. A <code>WebApplicationBuilder</code> is first created by calling the static method <code>WebApplication.CreateBuilder(args)</code>, the builder is used to configure services for dependency injection (DI), a <code>WebApplication</code> instance is created by calling <code>builder.Build()</code>, the app instance is used to configure the HTTP request pipeline (middleware), then the app is started by calling <code>app.Run()</code>.</p>
+
+                <p>I wrapped the <em>add services...</em> and <em>configure HTTP...</em> sections in curly brackets <code>{}</code> to group them together visually, the brackets are completely optional.</p>
+
+                <p>Internally the <code>WebApplicationBuilder</code> class calls the <code>ConfigureWebHostDefaults()</code> extension method which configures hosting for the web app including setting Kestrel as the web server, adding host filtering middleware and enabling IIS integration. For more info on the default builder settings see <a href="https://docs.microsoft.com/aspnet/core/fundamentals/host/generic-host#default-builder-settings" rel="nofollow" target="_blank">https://docs.microsoft.com/aspnet/core/fundamentals/host/generic-host#default-builder-settings</a>.</p>
+
+<pre class="line-numbers language-csharp"><code class=" language-csharp">using System.Text.Json.Serialization;
+using WebApi.Authorization;
+using WebApi.Entities;
+using WebApi.Helpers;
+using WebApi.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// add services to DI container
+{
+    var services = builder.Services;
+    var env = builder.Environment;
+ 
+    services.AddDbContext&lt;DataContext&gt;();
+    services.AddCors();
+    services.AddControllers()
+        .AddJsonOptions(x =&gt; x.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);
+
+    // configure strongly typed settings object
+    services.Configure&lt;AppSettings&gt;(builder.Configuration.GetSection("AppSettings"));
+
+    // configure DI for application services
+    services.AddScoped&lt;IJwtUtils, JwtUtils&gt;();
+    services.AddScoped&lt;IUserService, UserService&gt;();
+}
+
+var app = builder.Build();
+
+// add hardcoded test user to db on startup
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService&lt;DataContext&gt;();    
+    var testUser = new User
+    {
+        FirstName = "Test",
+        LastName = "User",
+        Username = "test",
+        PasswordHash = BCrypt.Net.BCrypt.HashPassword("test")
+    };
+    context.Users.Add(testUser);
+    context.SaveChanges();
+}
+
+// configure HTTP request pipeline
+{
+    // global cors policy
+    app.UseCors(x =&gt; x
+        .SetIsOriginAllowed(origin =&gt; true)
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials());
+
+    // global error handler
+    app.UseMiddleware&lt;ErrorHandlerMiddleware&gt;();
+
+    // custom jwt auth middleware
+    app.UseMiddleware&lt;JwtMiddleware&gt;();
+
+    app.MapControllers();
+}
+
+app.Run("http://localhost:4000");</code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <div>&nbsp;</div>
+
+                <h2><a name="web-api-csproj"></a>.NET CSProj File</h2>
+
+                <div><strong>Path: /WebApi.csproj</strong></div>
+
+                <p>The csproj (C# project) is an MSBuild based file that contains target framework and NuGet package dependency information for the application. The <code>ImplicitUsings</code> feature is enabled which tells the compiler to auto generate a set of global using directives based on the project type, removing the need to include a lot of common using statements. The global using statements are auto generated when you build the project and can be found in the file <code>/obj/Debug/net6.0/WebApi.GlobalUsings.g.cs</code>.</p>
+
+                <p>For more info on the C# project file see <a href="/post/2021/09/29/net-msbuild-csharp-project-file-csproj-in-a-nutshell">.NET + MSBuild - C# Project File (.csproj) in a Nutshell</a>.</p>
+
+<pre class="line-numbers language-xml"><code class=" language-xml"><span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>Project</span> <span class="token attr-name">Sdk</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>Microsoft.NET.Sdk.Web<span class="token punctuation">"</span></span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>PropertyGroup</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>TargetFramework</span><span class="token punctuation">&gt;</span></span>net6.0<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>TargetFramework</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>ImplicitUsings</span><span class="token punctuation">&gt;</span></span>enable<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>ImplicitUsings</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>PropertyGroup</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>ItemGroup</span><span class="token punctuation">&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>PackageReference</span> <span class="token attr-name">Include</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>BCrypt.Net-Next<span class="token punctuation">"</span></span> <span class="token attr-name">Version</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>4.0.2<span class="token punctuation">"</span></span> <span class="token punctuation">/&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>PackageReference</span> <span class="token attr-name">Include</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>Microsoft.AspNetCore.Authentication.JwtBearer<span class="token punctuation">"</span></span> <span class="token attr-name">Version</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>6.0.1<span class="token punctuation">"</span></span> <span class="token punctuation">/&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>PackageReference</span> <span class="token attr-name">Include</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>Microsoft.EntityFrameworkCore.InMemory<span class="token punctuation">"</span></span> <span class="token attr-name">Version</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>6.0.1<span class="token punctuation">"</span></span> <span class="token punctuation">/&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;</span>PackageReference</span> <span class="token attr-name">Include</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>System.IdentityModel.Tokens.Jwt<span class="token punctuation">"</span></span> <span class="token attr-name">Version</span><span class="token attr-value"><span class="token punctuation">=</span><span class="token punctuation">"</span>6.15.0<span class="token punctuation">"</span></span> <span class="token punctuation">/&gt;</span></span>
+                <span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>ItemGroup</span><span class="token punctuation">&gt;</span></span>
+<span class="token tag"><span class="token tag"><span class="token punctuation">&lt;/</span>Project</span><span class="token punctuation">&gt;</span></span></code></pre>
+
+                <div><a href="#project-structure">Back to top</a></div>
+
+                <p>&nbsp;</p>
+            </div>
+        

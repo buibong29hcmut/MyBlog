@@ -1,0 +1,48 @@
+﻿@inherits LayoutComponentBase
+@inject AppState _appState
+@implements IDisposable
+
+@using MyBlog.Web.App.Components
+<main id="container"> 
+<div class="header">
+ <div class="header_container">
+    <a href="#">MulCatLoveDotNet</a>
+    <a  class="link_page active"  href="/">Home</a>
+    <a class="link_page"  href="/">Contact</a>
+    <a class="link_page" href="/">About</a>
+ </div>
+</div>
+  <div class="content">
+      @Body   
+  </div>
+    @if (_showFooter == true)
+    {
+        <FooterComponent></FooterComponent>
+
+    }
+</main>
+@code{
+    private Boolean _showFooter = false;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        _appState.AppStateChanged += AppStateChanged;
+
+        _showFooter = _appState.LoadingIsFinished;
+    }
+
+    private async void AppStateChanged(object sender, EventArgs args)
+    {
+        _showFooter = _appState.LoadingIsFinished;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _appState.AppStateChanged -= AppStateChanged;
+    }
+}
+
+ 

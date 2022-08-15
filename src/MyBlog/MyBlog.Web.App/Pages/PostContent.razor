@@ -1,0 +1,18 @@
+﻿
+@page "/post/{Name}"
+@using MyBlog.Web.App.Components
+@if (Post != null)
+{
+    <div class="post_content">
+        <h3 class="header_post">@Post.Header</h3>
+        <div class="post_container">
+            <div class="post_left">
+                <PostDetailComponent Post="@Post"></PostDetailComponent>
+            </div>
+
+            <div class="post_right">
+                       <TagComponent></TagComponent>
+   </div>
+        </div>
+    </div>
+}

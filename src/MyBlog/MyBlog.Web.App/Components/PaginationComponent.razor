@@ -1,0 +1,18 @@
+﻿ 
+@if(CountPage>0){
+    <div class="post_paging">
+        @for (int i = 1; i <CountPage+1;i++)
+        {  
+            if(i==CurrentPage){
+                  <a class="item_post_paging active" @onclick="ChangeValue" href="@UrlFormat=@i">@i</a>
+
+                continue;
+            }
+            <a class="item_post_paging" @onclick="ChangeValue" href="@UrlFormat=@i">@i</a>
+
+        }
+
+    </div>
+}
+
+

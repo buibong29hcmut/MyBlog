@@ -1,0 +1,24 @@
+﻿.footer {
+    width: 100%;
+    height: 300px;
+    background-color: #1a1a27;
+    bottom:0;
+    color:white;
+    right:0;
+    left:0
+}
+.footer_container {
+    width: 80%;
+    margin-right: auto;
+    margin-left: auto;
+    display: grid;
+    grid-template-columns: 50% 30%;
+    justify-items: center;
+    gap: 20px;
+}
+.footer_col1{
+    width:90%;
+    padding-right:100px;
+    margin-left:auto;
+    margin-right:auto;
+}

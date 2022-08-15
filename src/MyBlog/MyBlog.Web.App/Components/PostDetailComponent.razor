@@ -1,0 +1,16 @@
+﻿       <div class="header_left">
+           <img src="https://img.icons8.com/fluency/344/overtime.png">
+           <h3 class="datetime_publish">PUBLISHED: @Post.Published</h3>
+       </div>
+       @if(Post.Tags.Count()>0){
+           <div class="tags">
+               @foreach(var tag in Post.Tags){
+                       <a href="posts/tag/@tag.TagLink" class="tag">@tag.Name</a>
+
+               }
+    </div>
+       }
+         
+            <div class="text">
+    @((MarkupString)@Post.Content)
+            </div>

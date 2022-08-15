@@ -1,0 +1,13 @@
+﻿@namespace MyBlog.Web.App.Components
+@if (Tags != null)
+{ 
+    <div class="tag_items">
+        @foreach (var item in Tags)
+        {
+
+            <div class="tag"  style="background-color:@BackGroundColor" >
+                <a href="/posts/tag/@item.TagLink">@item.Name</a>
+                </div>
+}
+                     
+   </div>}

@@ -1,0 +1,39 @@
+﻿@page "/posts/tag/{TagName?}"
+@using MyBlog.Web.App.Components
+
+
+<div class="blog">
+    <div class="header_blog">
+        <img class="img_blog" src="/img/ezgif-3-6d037c552f.gif" />
+    <h3>BLOG</h3>
+    </div>
+    @if (PostList != null)
+    {
+        <div class="blog_container">
+            <div class="left_blog">
+                <div class="left_blog_content">
+                    @foreach (var post in PostList)
+                    {
+                        <CardPostComponent  PostItem="post"></CardPostComponent>
+
+                }
+        
+
+            </div>
+                <PaginationComponent CountPage="PostList.TotalPages" CurrentPage="Page" UrlFormat="@UrlFormat"></PaginationComponent>
+        </div>
+        <div class="right_blog">
+        
+            <div class="search_blog">
+                  <input class="search_box" type="text" placeholder="Search.." name="search">
+                   <button type="submit"><i class="fa fa-search"></i></button>
+            </div>
+            <div class="all_tags">
+                    <TagComponent  BackGroundColor="#fc0f7d" HoverBackGroundColor="#08ac6c"></TagComponent>
+            </div>
+          
+            </div>
+    </div>
+    }
+</div>
+
