@@ -1,11 +1,12 @@
 ﻿.footer {
     width: 100%;
     height: 300px;
-    background-color: #1a1a27;
-    bottom:0;
-    color:white;
-    right:0;
-    left:0
+    bottom: 0;
+    color: white;
+    right: 0;
+    margin-top:20px;
+    left: 0;
+ 
 }
 .footer_container {
     width: 80%;
@@ -15,10 +16,28 @@
     grid-template-columns: 50% 30%;
     justify-items: center;
     gap: 20px;
+    padding-top: 10px;
+    padding-bottom: 20px;
+    padding-left:5px;
+    background-color: #151521;
+    border-radius: 10px;
 }
 .footer_col1{
     width:90%;
     padding-right:100px;
     margin-left:auto;
     margin-right:auto;
+}
+@media only screen and (max-width: 1000px) {
+    .footer_container {
+        width: 100%;
+        margin-left: auto;
+        margin-right: auto;
+        display:block;
+    }
+    footer_col2 .img {
+        width:80%;
+    }
+
+   
 }

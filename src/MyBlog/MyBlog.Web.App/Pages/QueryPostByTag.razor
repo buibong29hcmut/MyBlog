@@ -1,6 +1,7 @@
 ﻿@page "/posts/tag/{TagName?}"
 @using MyBlog.Web.App.Components
-
+@using MyBlog.Web.App.Pages.Bases
+@inherits BlogComponentBase
 
 <div class="blog">
     <div class="header_blog">
@@ -29,11 +30,15 @@
                    <button type="submit"><i class="fa fa-search"></i></button>
             </div>
             <div class="all_tags">
-                    <TagComponent  BackGroundColor="#fc0f7d" HoverBackGroundColor="#08ac6c"></TagComponent>
+                    <TagComponent Tags="Tags" BackGroundColor="#fc0f7d" HoverBackGroundColor="#08ac6c"></TagComponent>
             </div>
           
             </div>
     </div>
+        <FooterComponent></FooterComponent>
     }
+    
+  
+
 </div>
 

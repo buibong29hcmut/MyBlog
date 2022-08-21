@@ -1,11 +1,18 @@
-﻿
-.post_content{
- 
+﻿@keyframes FadeIn {
+    0% {
+        opacity: 0;
+    }
+
+    80% {
+        opacity: 1;
+    }
+}
+.post_content {
     width: 100%;
     margin-left: auto;
     margin-right: auto;
     margin-top: 70px;
-
+    animation: 2s ease-out 0s 1 FadeIn;
 }
 
 .blog_container {

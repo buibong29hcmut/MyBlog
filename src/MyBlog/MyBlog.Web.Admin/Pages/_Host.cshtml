@@ -1,8 +1,14 @@
 ﻿@page "/"
 @namespace MyBlog.Web.Admin.Pages
+@using Microsoft.AspNetCore.Components.Web
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@inject IHttpContextAccessor httpContextAccessor
+@*@inject BlazorAppContext context
+*@
 @{
     Layout = null;
+    //context.CurrentUserIP = httpContextAccessor.HttpContext.Connection?.RemoteIpAddress.ToString();
+
 }
 
 <!DOCTYPE html>
@@ -30,7 +36,9 @@
     <link href="_content/MudBlazor/MudBlazor.min.css?v=5.0.3" rel="stylesheet" />
     <script href="~/js/ckeditor.js" ></script>
      <script href="~/js/CKEditorInterop.js"></script>
-
+    <link href="//cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <link href="//cdn.quilljs.com/1.3.6/quill.bubble.css" rel="stylesheet">
+    <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
     <link href="_content/MudBlazor.ThemeManager/MudBlazorThemeManager.css" rel="stylesheet" />
 </head>
 <body>
@@ -47,11 +55,75 @@
         <a class="dismiss">🗙</a>
     </div>
     
-    <script src="~/js/ckeditor.js"></script>
+    <script src="/js/ckeditor.js"></script>
     <script src="~/js/CKEditorInterop.js"></script>
     <script src="~/js/editor.js"></script>
     <script src="~/js/ckeditorUploadAdapter.js"></script>
     <script src="_framework/blazor.server.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js?v=5.0.3"></script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script src="_content/Blazored.TextEditor/quill-blot-formatter.min.js"></script>
+    <script src="_content/Blazored.TextEditor/Blazored-BlazorQuill.js"></script>
+    <script>
+        function getData(editorId){
+            return editors[editorId].getData();
+        }
+
+    </script>
+    <script>
+        async function connectionDown(options) {
+            console.log("Connection Down - you could do some UI here...");
+            for (let i = 0; i < options.maxRetries; i++) {
+                console.log("Waiting for reconnect attempt #"+(i+1)+" ...");
+                await this.delay(options.retryIntervalMilliseconds);
+                if (this.isDisposed) {
+                    break;
+                }
+
+                try {
+                    // reconnectCallback will asynchronously return:
+                    // - true to mean success
+                    // - false to mean we reached the server, but it rejected the connection (e.g., unknown circuit ID)
+                    // - exception to mean we didn't reach the server (this can be sync or async)
+                    console.log("Starting Reconnect attempt #"+(i+1)+" ...");
+                    const result = await window.Blazor.reconnect();
+                    if (!result) {
+                        // If the server responded and refused to reconnect, log it
+                        console.error("Server Rejected");
+                    } else {
+                        // Reconnected!
+                        return;
+                    }
+                } catch (err) {
+                    // We got an exception so will try again
+                    console.error(err);
+                }
+            }
+            // all attempts failed - let's try a full reload
+            // This could be a UI change instead or something more complicated
+            location.reload();
+        }
+
+        function delay(durationMilliseconds) {
+            return new Promise(resolve => setTimeout(resolve, durationMilliseconds));
+        }
+
+        function connectionUp(e) {
+            // Reconnected
+            console.log("Connection UP!");
+            // if you have a UI to hide/change you can do that here.
+        }
+
+        window.Blazor.start({
+            reconnectionOptions: {
+                maxRetries: 30,
+                retryIntervalMilliseconds: 500,
+            },
+            reconnectionHandler: {
+                onConnectionDown: e => connectionDown(e),
+                onConnectionUp: e => connectionUp(e)
+            }
+        });
+    </script>
 </body>
 </html>

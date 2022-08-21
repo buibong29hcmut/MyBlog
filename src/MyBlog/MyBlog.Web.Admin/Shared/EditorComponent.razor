@@ -1,9 +1,11 @@
-﻿<div style="width:@EditorWidth">
+﻿@*<Virtualize Context="EditorValue">
+*@<div style="width:@EditorWidth">
 
-    <div id="@EditorId"></div>
+    <textarea id="@EditorId"></textarea>
 
 </div>
-
+@*</Virtualize>
+*@
 @code {
 
     [Inject] public IJSRuntime JSRuntime { get; set; }

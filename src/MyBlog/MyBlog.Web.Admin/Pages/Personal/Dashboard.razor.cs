@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.Identity;
 using MudBlazor;
 using MyBlog.Application.Commands.Abstracts;
 using MyBlog.Application.Commands.Posts.Delete;
@@ -8,7 +9,9 @@ using MyBlog.Application.Enum;
 using MyBlog.Application.Queries.Abstracts;
 using MyBlog.Application.Reponses.Posts;
 using MyBlog.Application.Requests.Posts;
+using MyBlog.Domain.Entities.Identity;
 using MyBlog.Share.Wrappers;
+using MyBlog.Web.Admin.Services;
 using static MudBlazor.CategoryTypes;
 
 namespace MyBlog.Web.Admin.Pages.Applications.Personal
@@ -18,7 +21,8 @@ namespace MyBlog.Web.Admin.Pages.Applications.Personal
         private  MudTable<PostForGetAllResponse> Table { get; set; }
         private PageList<PostForGetAllResponse> Posts { get; set; }
         private  QueryPostStatus Option { get; set; }
-      
+        [Inject]  UserManager<User> _userManager { get; set; }
+        [Inject] WebAuthenticateService auth { get; set; }
         public int BindPage { get; set; }
         private string searchString1 { get; set; } = "";
         [Inject]
@@ -30,9 +34,20 @@ namespace MyBlog.Web.Admin.Pages.Applications.Personal
         [Inject]
         public NavigationManager Navigator { get; set; }
         public PostForGetAllResponse postSelected { get; set; }
-        protected override async Task OnInitializedAsync()
+        //protected override async Task OnInitializedAsync()
+        //{
+        //    await auth.GetAuthenticationStateAsync();
+        //    await QueryPostByPage(1);
+        //}
+        protected override async Task OnAfterRenderAsync(bool firstRender)
         {
-            await QueryPostByPage(1);
+            if (firstRender)
+            {
+
+                await QueryPostByPage(1);
+
+                StateHasChanged();
+            }
         }
         private async Task QueryPost(GetAllPostQuery query)
         {

@@ -1,7 +1,13 @@
 ﻿
 @page "/post/{Name}"
 @using MyBlog.Web.App.Components
-@if (Post != null)
+@using MyBlog.Web.App.Pages.Bases
+@inherits BlogComponentBase
+@if (Post == null)
+{
+    <LoadIndicatorComponent></LoadIndicatorComponent>
+}
+else
 {
     <div class="post_content">
         <h3 class="header_post">@Post.Header</h3>
@@ -11,8 +17,11 @@
             </div>
 
             <div class="post_right">
-                       <TagComponent></TagComponent>
-   </div>
+                       <TagComponent Tags="Tags"></TagComponent>
+            </div>
         </div>
     </div>
+    <FooterComponent></FooterComponent>
 }
+
+

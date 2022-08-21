@@ -29,19 +29,19 @@ namespace MyBlog.Application.Queries.Posts
             PostNameSpecification spe = new PostNameSpecification(query.HeaderLink);
             Expression<Func<Post, PostDetail>> expression = p => new PostDetail
             {   Id=p.Id,
-                ImagePost=p.ImagePost,
                 Updated=p.Updated,
-                Created = p.Created,
                 Header = p.Header,
                 Published = p.Published,
-                ShortContent = p.ShortContent,
+                Created=p.Created,
                 Content=p.Content,
                 Tags = p.PostTags.Select(p => new TagForResponse(p.Tag.Name, p.Tag.TagLink))
 
             };
             var post=  await _unit
                 .Repository<Post>()
-                .FindByCondition(spe.Criteria, false)
+                .Entities
+                .AsNoTracking()
+                .Where(spe.Criteria)
                 .Select(expression)
                 .FirstOrDefaultAsync();
        

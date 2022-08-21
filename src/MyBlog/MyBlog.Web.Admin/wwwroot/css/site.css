@@ -62,3 +62,9 @@ a, .btn-link {
     .blazor-error-boundary::after {
         content: "An error has occurred."
     }
+#components-reconnect-modal{
+    display:none;
+}
+.components-reconnect-show, .components-reconnect-modal, .components-reconnect-failed, .components-reconnect-rejected {
+    display: none;
+}

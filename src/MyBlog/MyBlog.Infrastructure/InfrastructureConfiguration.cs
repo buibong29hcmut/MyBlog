@@ -29,7 +29,7 @@ namespace MyBlog.Infrastructure
                 services.AddMediatR(assembly);
             }
             var connectionString = configuration.GetConnectionString("BlogDb");
-            services.AddDbContext<MyBlogDbContext>(options =>
+            services.AddPooledDbContextFactory<MyBlogDbContext>(options =>
             {
                 options.UseSqlServer(connectionString);
                 options.EnableSensitiveDataLogging(true);
@@ -39,6 +39,7 @@ namespace MyBlog.Infrastructure
                 options.ConnectionString =    connectionString;
                 options.SchemaName = "dbo";
                 options.TableName = "BlogCaches";
+               
             });
             services.AddDbContext<MyBlogDbContext>(options =>
             {
@@ -48,8 +49,7 @@ namespace MyBlog.Infrastructure
 
             services.AddTransient(typeof(IRepository<>), typeof(Repository<>));
             services.AddTransient<IUnitOfWork, UnitOfWork>();
-            services.AddTransient<ICommandBus, CommandBus>();
-            services.AddTransient<IQueryBus, QueryBus>();
+          
           
             return services;
         }
@@ -59,18 +59,9 @@ namespace MyBlog.Infrastructure
         }
         public static IServiceCollection ConfigureIdentity(this IServiceCollection services)
         {
-            var builder = services.AddIdentityCore<User>(o =>
-            {
-                o.Password.RequireDigit = true;
-                o.Password.RequireLowercase = false;
-                o.Password.RequireUppercase = false;
-                o.Password.RequireNonAlphanumeric = false;
-                o.Password.RequiredLength = 10;
-                o.User.RequireUniqueEmail = true;
-            });
-            builder = new IdentityBuilder(builder.UserType, typeof(IdentityRole),
-           builder.Services);
-            builder.AddEntityFrameworkStores<MyBlogDbContext>().AddDefaultTokenProviders();
+            services.AddIdentity<User, IdentityRole>()
+                 .AddEntityFrameworkStores<MyBlogDbContext>()
+                 .AddDefaultTokenProviders();
             return services;
 
         }

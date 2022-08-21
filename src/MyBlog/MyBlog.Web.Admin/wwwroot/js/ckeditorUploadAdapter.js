@@ -29,7 +29,8 @@
         // integration to choose the right communication channel. This example uses
         // a POST request with JSON as a data structure but your configuration
         // could be different.
-        xhr.open('POST', 'https://localhost:7256/api/uploadfile', true);
+        var base_url = window.location.origin;
+        xhr.open('POST', base_url+ '/api/uploadfile', true);
         xhr.setRequestHeader("API_KEY", "29122002Az@");
         xhr.responseType = 'json';
     }

@@ -1,5 +1,7 @@
 ﻿
 @using Microsoft.AspNetCore.Components.Web
+@using MyBlog.Web.App.Components
+@using MyBlog.Web.App.SEOs
 @namespace MyBlog.Web.App.Pages
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -12,11 +14,12 @@
     <link href="css/site.css" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"> 
     <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
-
+    <component type="typeof(MetaDataComponent)" render-mode="ServerPrerendered" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link href="/css/site.css" rel="stylesheet" />
     <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
     <link href="MyBlog.Web.App.styles.css" rel="stylesheet" />
+
 
 </head>
 <body style="">
@@ -33,7 +36,6 @@
         <a href="" class="reload">Reload</a>
         <a class="dismiss">🗙</a>
     </div>
-    <script src="~/js/tailwindconfig.js"></script>
     <script src="_framework/blazor.server.js"></script>
    
 </body>

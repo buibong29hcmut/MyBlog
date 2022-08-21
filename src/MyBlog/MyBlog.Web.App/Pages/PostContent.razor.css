@@ -1,8 +1,18 @@
-﻿.post_content {
+﻿@keyframes FadeIn {
+    0% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+.post_content {
     width: 80%;
     margin-left: auto;
     margin-right: auto;
     margin-top: 70px;
+    animation: 2s ease-out 0s 1 FadeIn;
 }
 
 .post_container {
@@ -48,4 +58,22 @@
     }
 .datetime_publish{
     font-size:16px;
+}
+@media only screen and (max-width: 1000px) {
+    .post_content {
+        width: 90%;
+        margin-left: auto;
+        margin-right: auto;
+    }
+        .post_container {
+        width:100%;
+        display: grid;
+        grid-template-columns: 100%;
+        align-items: center;
+        align-content: center;
+        justify-content: center;
+    }
+    .post_right {
+        display: none;
+    }
 }

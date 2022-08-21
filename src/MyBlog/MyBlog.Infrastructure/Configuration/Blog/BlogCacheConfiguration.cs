@@ -14,7 +14,6 @@ namespace MyBlog.Infrastructure.Configuration.Blog
         public void Configure(EntityTypeBuilder<BLogCache> builder)
         {
             builder.HasKey(p => p.Id);
-            builder.HasIndex(p => p.Id).IsUnique();
             builder.Property(p => p.Id).HasMaxLength(449);
             
         }

@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Caching.Distributed;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using MyBlog.Application.Interfaces.Repositories;
 using MyBlog.Domain.Common;
@@ -18,11 +19,13 @@ namespace MyBlog.Infrastructure.Repositories
         private readonly IDistributedCache _cache;
         private bool _disposed;
         private Hashtable _repositories;
-        private readonly MyBlogDbContext _db;
-        public  UnitOfWork(IDistributedCache cache,MyBlogDbContext db)
+        private readonly IDbContextFactory<MyBlogDbContext> _factory;
+        private  MyBlogDbContext _db { get; }
+        public UnitOfWork(IDistributedCache cache, IDbContextFactory<MyBlogDbContext> factory)
         {
             _cache = cache;
-            _db = db;
+            _factory = factory;
+            _db = _factory.CreateDbContext();
         }
         public IRepository<TEntity> Repository<TEntity>() where TEntity:class
         {
@@ -33,33 +36,43 @@ namespace MyBlog.Infrastructure.Repositories
 
             if (!_repositories.ContainsKey(type))
             {
-                var repositoryType = typeof(Repository<>);
+               var repositoryType = typeof(Repository<>);
 
-                var repositoryInstance = Activator.CreateInstance(repositoryType.MakeGenericType(typeof(TEntity)), _db);
+                    var repositoryInstance = Activator.CreateInstance(repositoryType.MakeGenericType(typeof(TEntity)), _db);
 
-                _repositories.Add(type, repositoryInstance);
+                    _repositories.Add(type, repositoryInstance);
+                
+            
             }
 
             return (IRepository<TEntity>)_repositories[type];
         }
        public Task RollBack()
         {
-              _db.ChangeTracker.Entries().ToList().ForEach(x => x.Reload());
+        
+                _db.ChangeTracker.Entries().ToList().ForEach(x => x.Reload());
+
+          
             return Task.CompletedTask;
         }
         public async Task<int> Commit(CancellationToken cancellationToken=default)
         {
-            return await _db.SaveChangesAsync(cancellationToken);
+          
+                return await _db.SaveChangesAsync(cancellationToken);
+
+            
         }
 
         public async Task<int> CommitAndRemoveCache(CancellationToken cancellationToken, params string[] cacheKeys)
-        {
-            var result = await _db.SaveChangesAsync(cancellationToken);
-            foreach (var cacheKey in cacheKeys)
-            {
-                _cache.Remove(cacheKey);
-            }
-            return result;
+        {   var result= await _db.SaveChangesAsync(cancellationToken);
+                foreach (var cacheKey in cacheKeys)
+                {
+                    _cache.Remove(cacheKey);
+                }
+                return result;
+            
+           
+       
         }
         public void Dispose()
         {
@@ -72,7 +85,7 @@ namespace MyBlog.Infrastructure.Repositories
             {
                 if (disposing)
                 {
-               
+
                     _db.Dispose();
                 }
             }

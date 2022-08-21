@@ -5,6 +5,15 @@ header {
 }
 
 
+@keyframes FadeIn {
+    0% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
 h1,
 h2,
 h3,
@@ -78,10 +87,11 @@ h4 {
     margin-right:auto;
 }
 .content {
+    animation: 2s ease-out 0s 1 FadeIn;
     padding: 20px;
     min-height: 100%;
     margin: 0 auto -20px;
-    margin-bottom:150px;
+    margin-bottom: 150px;
 }
 
 @media screen and (max-width:700px) {

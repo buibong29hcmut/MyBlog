@@ -82,7 +82,8 @@ namespace MyBlog.Application.Commands.Admin.CreateOrUpdate
             }
             var cloneTags = tags.ToList();
             IEnumerable<string> tagExistingInPost=  post.PostTags.Select(p => p.Tag.Name);
-            foreach (var tag in tags.Where(p=> tagExistingInPost.Contains(p)))
+            var tagExistInpostInTagsUpdate = tags.Where(p => tagExistingInPost.Contains(p));
+            foreach (var tag in tagExistInpostInTagsUpdate)
             {
                 cloneTags.Remove(tag);
             }

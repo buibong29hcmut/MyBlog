@@ -16,10 +16,10 @@ namespace MyBlog.Infrastructure.Repositories
         where T: class
       
     {
-        private readonly MyBlogDbContext _db;
-        public Repository(MyBlogDbContext db)
+        public MyBlogDbContext _db { get; private set; }
+        public Repository(MyBlogDbContext db )
         {
-            _db = db;
+            _db =db;
         }
         public IQueryable<T> Entities => _db.Set<T>();
 

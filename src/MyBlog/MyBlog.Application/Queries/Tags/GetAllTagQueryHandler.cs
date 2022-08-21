@@ -24,11 +24,11 @@ namespace MyBlog.Application.Queries.Tags
         public async Task<Result<List<TagForResponse>>> Handle(GetAllTagQuery query,CancellationToken cancellationToken)
         {
             Expression<Func<Tag, TagForResponse>> expression =p=> new TagForResponse(p.Name, p.TagLink);
-            var result =await _unit.Repository<Tag>()
+            var result = _unit.Repository<Tag>()
                             .GetAll(false)
                             .Select(expression)
-                            .ToListAsync();
-           return   Result<List<TagForResponse>>.Success(result);
+                            .ToList();
+           return  await  Result<List<TagForResponse>>.SuccessAsync(result);
         }
     }
 }

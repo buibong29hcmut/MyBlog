@@ -19,15 +19,9 @@ namespace MyBlog.Application
         public static IServiceCollection AddApplication(this IServiceCollection services /*params Type[] types*/)
         {
 
-            //var assemblies = types.Select(type => type.GetTypeInfo().Assembly);
-
-            //foreach (var assembly in assemblies)
-            //{
-            //    services.AddMediatR(assembly);
-            //}
-
-            //services.AddScoped<ICommandBus, CommandBus>();
-            //services.AddScoped<IQueryBus, QueryBus>();
+         
+            services.AddScoped<ICommandBus, CommandBus>();
+            services.AddScoped<IQueryBus, QueryBus>();
             services.AddMediatR(Assembly.GetExecutingAssembly());
             services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
             services.AddTransient<IValidatorFactory, ServiceProviderValidatorFactory>();

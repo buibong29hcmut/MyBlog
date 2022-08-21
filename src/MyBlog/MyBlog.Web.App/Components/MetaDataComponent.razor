@@ -1,0 +1,31 @@
+﻿@using MyBlog.Web.App.SEOs
+@using System.ComponentModel
+@implements IDisposable
+@inject MetaDataState MetadataState
+<CascadingValue Value="this">
+    @if (MetadataState.Model != null)
+    {   
+        <title>@MetadataState.Model.Title</title>
+        @if (MetadataState.Model.MetaData != null)
+        {
+            @foreach (var item in MetadataState.Model.MetaData)
+            {
+                <meta name="@item.Name" content="@item.Content" />
+
+
+
+            }
+
+        }
+    }
+</CascadingValue>
+@code {
+    
+
+    protected override void OnInitialized()
+         => MetadataState.CurrentMetaDataChanged += CountChanged;
+
+    void CountChanged(object sender, SeoModel e) => StateHasChanged();
+
+    public void Dispose() => MetadataState.CurrentMetaDataChanged -= CountChanged;
+}

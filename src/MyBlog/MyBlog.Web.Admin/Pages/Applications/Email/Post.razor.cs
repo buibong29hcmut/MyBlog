@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.JSInterop;
 using MudBlazor;
 using MyBlog.Application.Commands.Abstracts;
 using MyBlog.Application.Commands.Admin.CreateOrUpdate;
@@ -13,6 +14,7 @@ using MyBlog.Application.Requests.Posts;
 using MyBlog.Application.Requests.Tags;
 using MyBlog.Share.Wrappers;
 using MyBlog.Web.Admin.Data;
+using MyBlog.Web.Admin.Shared;
 using Newtonsoft.Json;
 using System;
 using System.Net.Http.Headers;
@@ -24,8 +26,9 @@ namespace MyBlog.Web.Admin.Pages.Applications.Email
         [Inject] private IQueryBus QueryBus { get; set; }
         [Inject] private ICommandBus CommandBus { get; set; }
         [Inject] private NavigationManager Navigator { get; set; }
+        [Inject] private IJSRuntime _jsRuntime { get; set; }
         [Parameter] public string? Id { get; set; }
-
+        private EditorComponent editor { get; set; }
         private bool Clearing = false;
         private static string DefaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full";
         private string DragClass = DefaultDragClass;
@@ -38,15 +41,13 @@ namespace MyBlog.Web.Admin.Pages.Applications.Email
         private PostDetail PostDetail { get; set; }
         private HashSet<string> Tags { get; set; } = new HashSet<string>();
         private string TagItem { get; set; }
-
         private async void OnInputFileChanged(InputFileChangeEventArgs e)
         {
-            ClearDragClass();
-           await Clear();
-            var file = e.GetMultipleFiles()[0];
+       
+            var file = e.GetMultipleFiles().First();
             using (MultipartFormDataContent content = new MultipartFormDataContent())
             {
-                Stream stream = file.OpenReadStream(file.Size);
+                Stream stream = file.OpenReadStream(file.Size+100);
 
                 var fileStreamContent = new StreamContent(stream);
                 fileStreamContent.Headers.ContentType = new MediaTypeHeaderValue($"{file.ContentType}");
@@ -54,16 +55,17 @@ namespace MyBlog.Web.Admin.Pages.Applications.Email
 
                 HttpClient httpClient = new HttpClient()
                 {
-                    BaseAddress = new Uri("https://localhost:7256"),
+                    BaseAddress = new Uri(Navigator.BaseUri),
                 };
                 httpClient.DefaultRequestHeaders.Add("API_KEY", "29122002Az@");
                 var reponse = await httpClient.PostAsync("api/uploadfile", content);
                 UrlSaveToDataBase = JsonConvert.DeserializeObject<dynamic>(await reponse.Content.ReadAsStringAsync()).url;
                 UrlImagePost = @Navigator.BaseUri+ UrlSaveToDataBase;
                 Snackbar.Add("Đã upload file", MudBlazor.Severity.Success);
-                StateHasChanged();
+
 
             }
+            StateHasChanged();
         }
 
         private async Task Clear()
@@ -126,14 +128,16 @@ namespace MyBlog.Web.Admin.Pages.Applications.Email
                 CreateOrUpdatePostCommand PostItem = new CreateOrUpdatePostCommand()
                 {
                     Id = PostDetail.Id,
-                    Content = PostDetail.Content,
+                  
                     ShortContent = PostDetail.ShortContent,
                     Header = PostDetail.Header,
                     UrlImage = UrlSaveToDataBase,
                     IsVisible = Basic_CheckBox1,
                     HeaderLink = PostDetail.Header.Replace(" ", "-"),
                     Tags = Tags.ToList(),
+                    //Content= PostDetail.Content,
                 };
+                PostItem.Content = await GetContentStringHtmlEditor();
                 await CommandBus.Send<Result<Unit>>(PostItem, default);
                 SaveChanges("Profile details saved", MudBlazor.Severity.Success);
                 if (Id == null)
@@ -207,6 +211,11 @@ namespace MyBlog.Web.Admin.Pages.Applications.Email
         void OpenDrawer()
         {
             open = true;
+        }
+
+        private async ValueTask<string> GetContentStringHtmlEditor()
+        {
+            return await _jsRuntime.InvokeAsync<string>("getData", editor.EditorId);
         }
     }
 }

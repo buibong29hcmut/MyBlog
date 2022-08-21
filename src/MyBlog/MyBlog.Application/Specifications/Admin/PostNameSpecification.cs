@@ -10,7 +10,7 @@ namespace MyBlog.Application.Specifications.Admin
 {
     public class PostNameSpecification : BaseSpecification<Post>
     {
-        public PostNameSpecification(string Name) : base(p => p.HeaderLink == Name)
+        public PostNameSpecification(string Name) : base(p => p.HeaderLink == Name&& p.Published.HasValue)
         {
 
         }

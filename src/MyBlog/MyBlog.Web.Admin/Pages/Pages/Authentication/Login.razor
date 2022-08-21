@@ -7,6 +7,7 @@
 @inject WebAuthenticateService auth
 @inject NavigationManager navigate
 @inject ProtectedLocalStorage _protectedLocalStorage
+@inject ISnackbar _snackbar;
 @layout LoginLayout
 
 
@@ -26,7 +27,7 @@
 </div>
 
 
-        <MudButton Variant="Variant.Filled" OnClick="TryLogin" Color="Color.Primary" Link="/personal/dashboard" Size="Size.Large" FullWidth="true">Sign In</MudButton>
+        <MudButton Variant="Variant.Filled" OnClick="TryLogin" Color="Color.Primary" Size="Size.Large" FullWidth="true">Sign In</MudButton>
     </NotAuthorized>
     <Authorizing>
         Authorizing in process...
@@ -44,19 +45,32 @@
     private async Task TryLogin()
     {   model.UserName=UserName;
         model.Password = Password;
-        await auth.LoginAsync(model);
-        navigate.NavigateTo("/personal/dashboard");
-    }
-    protected override async void OnInitialized()
-    {
-       var user=await  auth.GetAuthenticationStateAsync();
-       if(user.User==null){
-            navigate.NavigateTo("/pages/authentication/login");
-       }
-      
-  
+        var result= await auth.LoginAsync(model);
+        if(result==false){
+            _snackbar.Add("Login failed", Severity.Error);
+
+        }
+        else{
+            navigate.NavigateTo("/personal/dashboard");
+
+        }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var authState = await auth.GetAuthenticationStateAsync();
+            if (!authState.User.IsInRole("Admin"))
+            {
+                navigate.NavigateTo("/pages/authentication/login");
+            }
+            else
+            {
+                navigate.NavigateTo("/personal/dashboard");
+            }
+        }
+    }
     void TogglePasswordVisibility()
     {
         @if (PasswordVisibility)

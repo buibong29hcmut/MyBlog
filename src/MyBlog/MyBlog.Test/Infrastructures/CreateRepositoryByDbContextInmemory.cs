@@ -28,7 +28,7 @@ namespace MyBlog.Test.Infrastructures
             {
                 SizeLimit = 1024,
             });
-            unit = new UnitOfWork(distributedCacheService, createDb._DB);
+            //unit = new UnitOfWork(distributedCacheService, createDb._DB);
         }
        
     }

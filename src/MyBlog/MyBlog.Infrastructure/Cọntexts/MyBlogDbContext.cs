@@ -18,6 +18,7 @@ namespace MyBlog.Infrastructure.Cọntexts
     {
         public MyBlogDbContext(DbContextOptions<MyBlogDbContext> options) : base(options)
         {
+           
 
         }
         public DbSet<Post> Posts { get; set; }

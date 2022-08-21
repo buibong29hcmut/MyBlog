@@ -2,24 +2,23 @@
 using Microsoft.AspNetCore.WebUtilities;
 using MyBlog.Application.Queries.Abstracts;
 using MyBlog.Application.Reponses.Posts;
+using MyBlog.Application.Reponses.Tags;
 using MyBlog.Application.Requests.Posts;
 using MyBlog.Share.Wrappers;
 using MyBlog.Web.App.Pages.Bases;
+using MyBlog.Web.App.SEOs;
 using System.Xml.Linq;
 
 namespace MyBlog.Web.App.Pages
 {
     public partial class Index
     {
-        [Inject] private IQueryBus QueryBus { get; set; }
-        [Inject] private IConfiguration Configuration { get; set; } 
+     
         [Parameter]
         public int Page { get; set; } = 1;
         [Parameter]
         public string TagName { get; set; }
-        [Inject]
-        private AppState _appState { get; set; }
-
+  
         [Inject] NavigationManager Navigator { get; set; }
         private PageList<PostForGetAllResponse> PostList { get; set; } 
 
@@ -40,9 +39,23 @@ namespace MyBlog.Web.App.Pages
    
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
-
+            await Task.Delay(100);
+        
             if (firstRender)
             {
+                State.Model = new SeoModel()
+                {
+                    Title = "muncatvzer",
+                    MetaData = new List<MetaDataModel>()
+                    {
+                       new MetaDataModel()
+                       {
+                           Name="C",
+                           Content="D",
+                       }
+                    }
+                };
+
                 var uri = Navigator.ToAbsoluteUri(Navigator.Uri);
                 var queryStrings = QueryHelpers.ParseQuery(uri.Query);
                 if (queryStrings.TryGetValue("Page", out var PageNumber))
@@ -60,12 +73,14 @@ namespace MyBlog.Web.App.Pages
                         Navigator.NavigateTo("/");
                     }
                 }
+                 await base.GetAllTags();
                 await GetPostByPage();
+
               
             }
             await base.OnAfterRenderAsync(firstRender);
-            StateHasChanged();
             _appState.LoadingIsFinished = true;
+            StateHasChanged();
 
 
         }

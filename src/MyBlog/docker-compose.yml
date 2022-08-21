@@ -1,0 +1,15 @@
+version: '3.4'
+
+services:
+  myblog.web.admin:
+    image: ${DOCKER_REGISTRY-}myblogwebadmin
+    build:
+      context: .
+      dockerfile: MyBlog.Web.Admin/Dockerfile
+
+  myblog.web.app:
+    image: ${DOCKER_REGISTRY-}myblogwebapp
+    build:
+      context: .
+      dockerfile: MyBlog.Web.App/Dockerfile
+

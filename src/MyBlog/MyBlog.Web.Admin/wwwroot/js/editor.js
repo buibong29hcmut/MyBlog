@@ -4,8 +4,7 @@
 	};
 }
 
-editors = {};
-
+var editors = {}
 function CreateEditor(editorId, defaultValue, height, dotNetReference) {
 	ClassicEditor
 		.create(document.getElementById(editorId), {
@@ -55,13 +54,13 @@ function CreateEditor(editorId, defaultValue, height, dotNetReference) {
 
 
 
-			editor.model.document.on('change:data', () => {
+			//editor.model.document.on('change:data', () => {
 
-				let data = editor.getData();
+			//	let data = editor.getData();
 
-				dotNetReference.invokeMethodAsync('OnEditorChanged', data);
+			//	dotNetReference.invokeMethodAsync('OnEditorChanged', data);
 
-			});
+			//});
 
 		})
 
@@ -84,7 +83,5 @@ function DestroyEditor(editorId) {
 	editors[editorId].destroy().then(() => delete editors[editorId])
 
 		.catch(error => console.log(error));
-
-
 
 } 

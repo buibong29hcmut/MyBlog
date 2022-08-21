@@ -11,7 +11,6 @@ namespace MyBlog.Web.App.Pages
 {
     public partial class QueryPostByTag
     {
-        [Inject] private IQueryBus QueryBus { get; set; }
         [Parameter]
         public int Page { get; set; }= 1;
         [Parameter]
@@ -20,8 +19,7 @@ namespace MyBlog.Web.App.Pages
       
         [Inject] NavigationManager Navigator { get; set; }
         private PageList<PostForGetAllByTagName> PostList { get; set; }
-        [Inject]
-        private AppState _appState { get; set; }
+  
 
 
         public async Task GetPostByTagName()
@@ -67,12 +65,51 @@ namespace MyBlog.Web.App.Pages
 
                 }
             }
-
-            StateHasChanged();
+            await base.GetAllTags();
             await base.SetParametersAsync(ParameterView.Empty);
-            _appState.LoadingIsFinished = true;
+
 
         }
+
+        //protected override async Task OnAfterRenderAsync(bool firstRender)
+        //{
+        //    Thread.Sleep(800);
+        //    if (firstRender)
+        //    {
+        //        var uri = Navigator.ToAbsoluteUri(Navigator.Uri);
+        //        var queryStrings = QueryHelpers.ParseQuery(uri.Query);
+        //        if (queryStrings.TryGetValue("Page", out var PageNumber))
+        //        {
+        //            try
+        //            {
+        //                this.Page = Convert.ToInt32(PageNumber);
+        //                if (this.Page < 0)
+        //                {
+        //                    Page = 1;
+        //                }
+        //            }
+        //            catch
+        //            {
+        //                Navigator.NavigateTo("/");
+        //            }
+        //        }
+             
+        //            if (TagName is not null)
+        //            {
+        //                await GetPostByTagName();
+
+        //            }
+        //    }
+        //        await base.GetAllTags();
+
+
+            
+        //    await base.OnAfterRenderAsync(firstRender);
+        //    _appState.LoadingIsFinished = true;
+        //    StateHasChanged();
+
+
+        //}
 
 
     }
